@@ -26,6 +26,8 @@
 //#include <MQTTClient.h>
 #include <wolfmqtt/mqtt_client.h>
 
+#include "config.h"
+
 #include "debug.h"
 #include "wifi.h"
 #include "mqtt.h"
