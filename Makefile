@@ -18,6 +18,7 @@
 PROJECT_NAME := led-controller
 
 SOURCES := src/main.c \
+           src/board.c \
            src/gamma-lut.c \
            src/clock.c \
            src/led.c \

@@ -7,6 +7,7 @@
 *.map
 *.elf
 
+/src/gamma-lut.c
 /src/gamma-lut-gen
 
 # emacs files

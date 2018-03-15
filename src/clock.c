@@ -19,25 +19,17 @@
 #include <libopencm3/stm32/gpio.h>
 
 #include "clock.h"
-
+#include "board.h"
 #include "led.h"
 
 volatile uint64_t clock_ticks;
 
 void sys_tick_handler() {
-  static uint32_t prescaler = 0;
-
   clock_ticks++;
 
+  board_tick();
+
   led_update_all_channels();
-
-  if (prescaler == 1000) {
-    gpio_toggle(GPIOA, GPIO15);
-    gpio_toggle(GPIOC, GPIO15);
-    prescaler = 0;
-  }
-
-  prescaler++;
 }
 
 void clock_delay_ms(uint32_t ms) {
