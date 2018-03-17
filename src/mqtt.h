@@ -111,8 +111,7 @@ struct mqtt_context {
   uint8_t rx_buf[MQTT_RX_BUF_SIZE];
 
   uint16_t packet_id;
-  uint8_t sub_state;
-  uint8_t pub_state;
+  uint64_t last_ping;
   mqtt_conn_state_t conn_state;
 };
 

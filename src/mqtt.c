@@ -569,7 +569,9 @@ void mqtt_poll(struct mqtt_context *context) {
   case MQTT_CONN_STATE_WAIT:
     ret = MqttClient_WaitMessage(&context->client, 5000);
 
-    if (ret == MQTT_CODE_ERROR_TIMEOUT) {
+    if (ret == MQTT_CODE_ERROR_TIMEOUT ||
+	(ret == MQTT_CODE_SUCCESS && clock_ticks - context->last_ping > 5000)) {
+      // send ping on timeout or if haven't send a ping in 5 seconds
       context->conn_state = MQTT_CONN_STATE_WAIT_PING;
     } else if (!(ret == MQTT_CODE_CONTINUE || ret == MQTT_CODE_SUCCESS)) {
       const char *code_str = MqttClient_ReturnCodeToString(ret);
@@ -581,6 +583,7 @@ void mqtt_poll(struct mqtt_context *context) {
     ret = MqttClient_Ping(&context->client);
     if (ret == MQTT_CODE_SUCCESS) {
       DBG("mqtt: ping successful");
+      context->last_ping = clock_ticks;
       context->conn_state = MQTT_CONN_STATE_WAIT;
     } else if (ret != MQTT_CODE_CONTINUE) {
       const char *code_str = MqttClient_ReturnCodeToString(ret);
