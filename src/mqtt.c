@@ -16,10 +16,12 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "mqtt.h"
 #include "debug.h"
 #include "states.h"
+#include "led.h"
 
 #include <wolfmqtt/mqtt_client.h>
 #include <winc1500/socket/include/socket.h>
@@ -48,15 +50,16 @@ static struct socket_context_map context_map[1] = {
   { 0, 0 }
 };
 
-int mqtt_topic_cmp(MqttMessage *msg, const char *topic) {
-  int len = msg->topic_name_len;
-  const char *str = msg->topic_name;
-  while (len--) {
-    if (*str++ != *topic++) {
-      return 0;
-    }
-  }
-  return 1;
+static void get_topic_name(char *topic) {
+  uint8_t len = 0;
+
+  const char *topic_base = "led-controller";
+
+  strcpy(topic, topic_base);
+  len += strlen(topic_base);
+
+  // null-terminate topic
+  topic[len] = 0;
 }
 
 /* ---------- mqtt net callbacks ---------- */
@@ -167,7 +170,7 @@ static int mqtt_net_read(void *context, uint8_t *buf, int len, int timeout) {
   int ret;
   int rc = 0;
 
-  DBG("mqtt_net: read (%s, %u bytes)", sock_state_strings[sock_ctx->state], len);
+  //DBG("mqtt_net: read (%s, %u bytes)", sock_state_strings[sock_ctx->state], len);
 
   switch (sock_ctx->state) {
   case MQTT_SOCK_STATE_CONNECTED:
@@ -182,45 +185,6 @@ static int mqtt_net_read(void *context, uint8_t *buf, int len, int timeout) {
       DBG("mqtt_net: waiting for read");
       sock_ctx->state = MQTT_SOCK_STATE_READING;
     }
-
-    /*if (sock_ctx->rx_ovf_len > 0) {
-      // there is data left in the overflow buffer
-      uint8_t ovf_len;
-
-      if (len > sock_ctx->rx_ovf_len - sock_ctx->rx_ovf_pos) {
-	ovf_len = sock_ctx->rx_ovf_len - sock_ctx->rx_ovf_pos;
-      } else {
-	ovf_len = len;
-      }
-
-      DBG("mqtt_net: reading %u bytes from ovf buffer", ovf_len);
-
-      memcpy(buf, sock_ctx->rx_ovf_buf + sock_ctx->rx_ovf_pos, ovf_len);
-      sock_ctx->rx_ovf_pos += ovf_len;
-
-      if (sock_ctx->rx_ovf_pos >= sock_ctx->rx_ovf_len) {
-	// buffer is empty now
-	sock_ctx->rx_ovf_pos = 0;
-	sock_ctx->rx_ovf_len = 0;
-      }
-
-      // return the number of bytes read from the ovf buf
-      rc = ovf_len;
-
-      if (ovf_len == len) {
-	// we are done
-	sock_ctx->state = MQTT_SOCK_STATE_CONNECTED;
-      }
-    } else {
-      DBG("mqtt_net: using recv");
-      ret = recv(sock_ctx->sock, buf, len, timeout);
-      if (ret != SOCK_ERR_NO_ERROR) {
-	DBG("mqtt_net: read failed: %d", ret);
-	rc = MQTT_CODE_ERROR_NETWORK;
-      } else {
-	rc = MQTT_CODE_CONTINUE;
-      }
-      }*/
     break;
 
   case MQTT_SOCK_STATE_READING:
@@ -228,40 +192,6 @@ static int mqtt_net_read(void *context, uint8_t *buf, int len, int timeout) {
     break;
 
   case MQTT_SOCK_STATE_READ_DONE:
-
-
-     /*
-       if (sock_ctx->rx_ovf_len > 0) {
-      // there is data left in the overflow buffer
-      uint8_t ovf_len;
-
-      if (len > sock_ctx->rx_ovf_len - sock_ctx->rx_ovf_pos) {
-	ovf_len = sock_ctx->rx_ovf_len - sock_ctx->rx_ovf_pos;
-      } else {
-	ovf_len = len;
-      }
-
-      DBG("mqtt_net: copying %u bytes from ovf buffer", ovf_len);
-
-      memcpy(buf, sock_ctx->rx_ovf_buf + sock_ctx->rx_ovf_pos, ovf_len);
-      sock_ctx->rx_ovf_pos += ovf_len;
-
-      if (sock_ctx->rx_ovf_pos >= sock_ctx->rx_ovf_len) {
-	// buffer is empty now
-	sock_ctx->rx_ovf_pos = 0;
-	sock_ctx->rx_ovf_len = 0;
-      }
-
-      // return the number of bytes read from the ovf buf
-      rc = ovf_len;
-
-      if (ovf_len == len) {
-	// we are done
-	sock_ctx->state = MQTT_SOCK_STATE_CONNECTED;
-      }
-    }
-    */
-
      ret = recv_wrapper(sock_ctx, buf, len, 0);
      if (ret > 0) {
        sock_ctx->state = MQTT_SOCK_STATE_CONNECTED;
@@ -281,6 +211,11 @@ static int mqtt_net_read(void *context, uint8_t *buf, int len, int timeout) {
 
      break;
 
+  case MQTT_SOCK_STATE_READ_TIMEOUT:
+    rc = MQTT_CODE_ERROR_TIMEOUT;
+    sock_ctx->state = MQTT_SOCK_STATE_CONNECTED;
+    break;
+
   case MQTT_SOCK_STATE_READ_ERR:
     rc = MQTT_CODE_ERROR_NETWORK;
     break;
@@ -299,7 +234,7 @@ static int mqtt_net_write(void *context, const uint8_t *buf, int len, int timeou
   int ret;
   int rc;
 
-  DBG("mqtt_net: write (%s, %u bytes)", sock_state_strings[sock_ctx->state], len);
+  //DBG("mqtt_net: write (%s, %u bytes)", sock_state_strings[sock_ctx->state], len);
 
   switch (sock_ctx->state) {
   case MQTT_SOCK_STATE_CONNECTED:
@@ -346,11 +281,6 @@ static int mqtt_net_disconnect(void *context) {
   return MQTT_CODE_SUCCESS;
 }
 
-static int mqtt_cb(MqttClient *client, MqttMessage *msg, uint8_t msg_new, uint8_t msg_done) {
-  DBG("mqtt: cb called");
-  return MQTT_CODE_SUCCESS;
-}
-
 /* ---------- socket handling ---------- */
 
 static void handle_socket_connect(struct mqtt_sock_context *sock_ctx, tstrSocketConnectMsg *conn_msg) {
@@ -363,19 +293,14 @@ static void handle_socket_connect(struct mqtt_sock_context *sock_ctx, tstrSocket
   }
 }
 
-
-
 static void handle_socket_recv(struct mqtt_sock_context *sock_ctx, tstrSocketRecvMsg *recv_msg) {
+  int16_t buf_len = recv_msg->s16BufferSize;
   if (recv_msg->s16BufferSize > 0) {
-    int16_t buf_len = recv_msg->s16BufferSize;
-
     DBG("sock: recv %u, rem %u, buf: 0x%x", buf_len, recv_msg->u16RemainingSize, recv_msg->pu8Buffer);
 
     for (int i = 0; i < buf_len; i++) {
       DBG("data: 0x%x", recv_msg->pu8Buffer[i]);
     }
-
-    //if (recv_msg->u16RemainingSize > 0) {
 
     DBG("sock: copying %u bytes to ovf_buf, len: %u", buf_len, sock_ctx->rx_ovf_len);
 
@@ -393,13 +318,20 @@ static void handle_socket_recv(struct mqtt_sock_context *sock_ctx, tstrSocketRec
     } else {
       sock_ctx->state = MQTT_SOCK_STATE_READ_DONE;
     }
-  } else if (recv_msg->s16BufferSize == 0) {
+  } else if (buf_len == 0) {
     DBG("sock: socket closed");
     // we've been disconnected ?
     sock_ctx->state = MQTT_SOCK_STATE_READ_ERR;
   } else {
-    DBG("sock: recv err: %d", recv_msg->s16BufferSize);
-    sock_ctx->state = MQTT_SOCK_STATE_READ_ERR;
+    if (buf_len == SOCK_ERR_TIMEOUT) {
+      DBG("sock: recv timeout");
+      sock_ctx->state = MQTT_SOCK_STATE_READ_TIMEOUT;
+
+      // else if (buf_len == SOCK_ERR_CONN_ABORTED) {}
+    } else {
+      DBG("sock: recv err: %d", buf_len);
+      sock_ctx->state = MQTT_SOCK_STATE_READ_ERR;
+    }
   }
 }
 
@@ -442,6 +374,67 @@ void mqtt_socket_handler(SOCKET sock, uint8_t msg_type, void *msg) {
 
 /* ---------- mqtt functions ---------- */
 
+static uint16_t mqtt_new_packet_id() {
+  static uint16_t last_pid = 0;
+
+  return last_pid++;
+}
+
+static int compare_topic(MqttMessage *msg, const char *topic) {
+  return memcmp(msg->topic_name, topic, msg->topic_name_len) == 0;
+}
+
+static void msg2str(MqttMessage *msg, char *str) {
+  memcpy(str, msg->buffer, msg->buffer_len);
+  str[msg->buffer_len] = 0; // null-terminate string
+}
+
+static int mqtt_cb(MqttClient *client, MqttMessage *msg, uint8_t msg_new, uint8_t msg_done) {
+  struct mqtt_context *context = (struct mqtt_context *)client->ctx;
+  char topic_name[64];
+  char msg_str[16];
+
+  // copy topic name and null-terminate it
+  memcpy(topic_name, msg->topic_name, msg->topic_name_len);
+  topic_name[msg->topic_name_len] = 0;
+
+  DBG("mqtt: cb: topic: %s, new: %u, done: %u", topic_name, msg_new, msg_done);
+
+  if (msg_new) {
+    for (int i = 0; i < msg->buffer_len; i++) {
+      DBG("mqtt: msg 0x%x", msg->buffer[i]);
+    }
+
+    if (compare_topic(msg, MQTT_TOPIC_ALL_SET)) {
+      int val = *msg->buffer == '0' ? 0 : 1;
+      DBG("mqtt: got set all to %d", val);
+      led_set_all_ch_override(val);
+    } else if (compare_topic(msg, MQTT_TOPIC_CH_BR_SET(1))) {
+      uint8_t val;
+      msg2str(msg, msg_str);
+      val = strtoul(msg_str, NULL, 10);
+      led_channels[0].value = val;
+    } else if (compare_topic(msg, MQTT_TOPIC_CH_BR_SET(2))) {
+      uint8_t val;
+      msg2str(msg, msg_str);
+      val = strtoul(msg_str, NULL, 10);
+      led_channels[1].value = val;
+    } else if (compare_topic(msg, MQTT_TOPIC_GRP_RGB_SET(1))) {
+      uint8_t r, g, b;
+      char *end = msg_str;
+      msg2str(msg, msg_str);
+      r = strtoul(end, &end, 10); end++;
+      g = strtoul(end, &end, 10); end++;
+      b = strtoul(end, &end, 10);
+      led_channels[0].value = r;
+      led_channels[1].value = g;
+      led_channels[2].value = b;
+    }
+  }
+
+  return MQTT_CODE_SUCCESS;
+}
+
 void mqtt_init(struct mqtt_context *context) {
   int ret;
 
@@ -467,6 +460,35 @@ void mqtt_init(struct mqtt_context *context) {
 void mqtt_connect(struct mqtt_context *context) {
   int ret;
 
+  context->conn_state = MQTT_CONN_STATE_NETCONNECT;
+}
+
+void mqtt_publish(struct mqtt_context *context, const char *topic, const char *msg) {
+  int ret;
+  MqttPublish pub;
+
+  memset(&pub, 0, sizeof(MqttPublish));
+
+  pub.buffer = msg;
+  pub.total_len = strlen(msg);
+  pub.topic_name = topic;
+  pub.packet_id = ++context->packet_id;
+  pub.duplicate = 0;
+  pub.retain = 0;
+
+  ret = MqttClient_Publish(&context->client, &pub);
+  if (ret != MQTT_CODE_SUCCESS) {
+    const char *code_str = MqttClient_ReturnCodeToString(ret);
+    DBG("mqtt: publish failed: %s (%d)", code_str, ret);
+  } else {
+    DBG("mqtt: publish successful");
+  }
+}
+
+void mqtt_poll(struct mqtt_context *context) {
+  static uint64_t last_ping = 0;
+  int ret;
+
   switch (context->conn_state) {
   case MQTT_CONN_STATE_INIT:
     memset(&context->connect, 0, sizeof(MqttConnect));
@@ -474,9 +496,8 @@ void mqtt_connect(struct mqtt_context *context) {
     context->connect.client_id = "led-controller";
     context->connect.keep_alive_sec = 10;
 
-    context->conn_state = MQTT_CONN_STATE_NETCONNECT;
+    break;
 
-    /* fallthrough */
   case MQTT_CONN_STATE_NETCONNECT:
     ret = MqttClient_NetConnect(&context->client,
 				"192.168.2.8",
@@ -514,63 +535,65 @@ void mqtt_connect(struct mqtt_context *context) {
       context->conn_state = MQTT_CONN_STATE_FAILED;
     }
     break;
+
   case MQTT_CONN_STATE_CONNECTED:
-    signal_event(EVENT_MQTT_CONNECTED);
+    memset(context->topics, 0, sizeof(context->topics));
+    context->topics[0].topic_filter = MQTT_TOPIC_ALL_SET;
+    context->topics[1].topic_filter = MQTT_TOPIC_CH_BR_SET(1);
+    context->topics[2].topic_filter = MQTT_TOPIC_CH_BR_SET(2);
+    context->topics[3].topic_filter = MQTT_TOPIC_GRP_RGB_SET(1);
+
+    memset(&context->sub, 0, sizeof(MqttSubscribe));
+    context->sub.topics = context->topics;
+    context->sub.topic_count = sizeof(context->topics) / sizeof(context->topics[0]);
+    context->sub.packet_id  = mqtt_new_packet_id();
+
+    context->conn_state = MQTT_CONN_STATE_SUBSCRIBE;
+
+    // fallthrough
+    //break;
+
+  case MQTT_CONN_STATE_SUBSCRIBE:
+    ret = MqttClient_Subscribe(&context->client, &context->sub);
+    if (ret == MQTT_CODE_SUCCESS) {
+      context->conn_state = MQTT_CONN_STATE_WAIT;
+      signal_event(EVENT_MQTT_CONNECTED);
+    } else if (ret == MQTT_CODE_CONTINUE) {
+      /* nop */
+    } else {
+      const char *code_str = MqttClient_ReturnCodeToString(ret);
+      DBG("mqtt: subscribe failed: %s (%d)", code_str, ret);
+    }
     break;
+
+  case MQTT_CONN_STATE_WAIT:
+    ret = MqttClient_WaitMessage(&context->client, 5000);
+
+    if (ret == MQTT_CODE_ERROR_TIMEOUT) {
+      context->conn_state = MQTT_CONN_STATE_WAIT_PING;
+    } else if (!(ret == MQTT_CODE_CONTINUE || ret == MQTT_CODE_SUCCESS)) {
+      const char *code_str = MqttClient_ReturnCodeToString(ret);
+      DBG("mqtt: waitmessage failed: %s (%d)", code_str, ret);
+    }
+    break;
+
+  case MQTT_CONN_STATE_WAIT_PING:
+    ret = MqttClient_Ping(&context->client);
+    if (ret == MQTT_CODE_SUCCESS) {
+      DBG("mqtt: ping successful");
+      context->conn_state = MQTT_CONN_STATE_WAIT;
+    } else if (ret != MQTT_CODE_CONTINUE) {
+      const char *code_str = MqttClient_ReturnCodeToString(ret);
+      DBG("mqtt: ping failed: %s (%d)", code_str, ret);
+    }
+    break;
+
   case MQTT_CONN_STATE_FAILED:
     signal_event(EVENT_MQTT_DISCONNECTED);
     break;
-  }
 
-  /*
-  topic.topic_filter = "led/status";
-  sub.topics = &topic;
-  sub.topic_count = 1;
-
-  ret = MqttClient_Subscribe(&context->client, &sub);
-  if (ret != MQTT_CODE_SUCCESS) {
-    const char *code_str = MqttClient_ReturnCodeToString(ret);
-    DBG("mqtt: subscribe failed: %s (%d)", code_str, ret);
-  } else {
-    DBG("mqtt: subscribe successful");
-    }*/
-}
-
-void mqtt_publish(struct mqtt_context *context, const char *topic, const char *msg) {
-  int ret;
-  MqttPublish pub;
-
-  memset(&pub, 0, sizeof(MqttPublish));
-
-  pub.buffer = msg;
-  pub.total_len = strlen(msg);
-  pub.topic_name = topic;
-  pub.packet_id = ++context->packet_id;
-  pub.duplicate = 0;
-  pub.retain = 0;
-
-  ret = MqttClient_Publish(&context->client, &pub);
-  if (ret != MQTT_CODE_SUCCESS) {
-    const char *code_str = MqttClient_ReturnCodeToString(ret);
-    DBG("mqtt: publish failed: %s (%d)", code_str, ret);
-  } else {
-    DBG("mqtt: publish successful");
-  }
-}
-
-void mqtt_poll(struct mqtt_context *context) {
-  static uint64_t last_ping = 0;
-  int ret;
-
-  if (clock_ticks - last_ping > 5000) {
-    if (context->conn_state == MQTT_CONN_STATE_CONNECTED) {
-      DBG("mqtt: ping");
-      ret = MqttClient_Ping(&context->client);
-      if (ret != MQTT_CODE_CONTINUE) {
-	last_ping = clock_ticks;
-      }
-    }
-
-    //mqtt_publish(context, "led-controller/status", "alive");
+  default:
+    DBG("mqtt:unknown mqtt connection state: %d", context->conn_state);
+    break;
   }
 }

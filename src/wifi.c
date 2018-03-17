@@ -28,6 +28,7 @@
 
 #include "config.h"
 
+#include "board.h"
 #include "debug.h"
 #include "wifi.h"
 #include "mqtt.h"
@@ -108,7 +109,7 @@ void wifi_init() {
   nm_bsp_init();
   DBG("wifi: bsp init done");
 
-  if (gpio_get(GPIOA, GPIO0)) {
+  if (gpio_get(BOARD_BTN_PORT, BOARD_BTN_ONBOARD_PIN)) {
     // wifi bootloader mode
     gpio_set(GPIOE, GPIO15);
     nm_bsp_reset();

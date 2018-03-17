@@ -128,9 +128,9 @@ void handle_states() {
     DBG("ready to connect mqtt");
     signal_event(EVENT_MQTT_CONNECTING);
     mqtt_init(&mqtt_ctx);
+    mqtt_connect(&mqtt_ctx);
     break;
   case STATE_MQTT_CONNECTING:
-    mqtt_connect(&mqtt_ctx);
     break;
   case STATE_IDLE:
     break;

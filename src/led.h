@@ -31,9 +31,10 @@ struct led_channel {
 
 #define LED_CHANNEL_NUM                 12
 
-extern struct led_channel led_channels[];
+extern volatile struct led_channel led_channels[];
 
 void led_init();
+void led_set_all_ch_override(uint8_t val);
 void led_ch_update(struct led_channel *ch);
 void led_update_all_channels();
 

@@ -22,7 +22,8 @@
 #include "led.h"
 #include "gamma-lut.h"
 
-struct led_channel led_channels[LED_CHANNEL_NUM];
+volatile struct led_channel led_channels[LED_CHANNEL_NUM];
+static volatile uint8_t all_ch_override = 1;
 
 static void setup_pwm(uint32_t timer_periph) {
   timer_set_mode(timer_periph, TIM_CR1_CKD_CK_INT, TIM_CR1_CMS_EDGE, TIM_CR1_DIR_UP);
@@ -54,7 +55,6 @@ void led_init() {
     led_channels[i].pwm_reg = 0;
   }
 
-#if defined(STM32F1)
   const uint32_t gpioa_mask = GPIO0 | GPIO1 | GPIO2 | GPIO3;
   gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_50_MHZ, GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, gpioa_mask);
 
@@ -82,28 +82,18 @@ void led_init() {
   led_channels[9].pwm_reg = (volatile uint16_t *)&TIM_CCR2(TIM4);
   led_channels[10].pwm_reg = (volatile uint16_t *)&TIM_CCR3(TIM4);
   led_channels[11].pwm_reg = (volatile uint16_t *)&TIM_CCR4(TIM4);
-#elif defined(STM32F3)
-  // stm23f3 dev board setup, only using TIM3
-  rcc_periph_clock_enable(RCC_GPIOB);
-  const uint32_t gpiob_mask = GPIO4 | GPIO5 | GPIO0 | GPIO1;
-  gpio_mode_setup(GPIOB, GPIO_MODE_AF, GPIO_PUPD_NONE, gpiob_mask);
-  gpio_set_af(GPIOB, GPIO_AF2, gpiob_mask);
-  gpio_set_output_options(GPIOB, GPIO_OTYPE_PP, GPIO_OSPEED_100MHZ, gpiob_mask);
+}
 
-  rcc_periph_clock_enable(RCC_TIM3);
-  setup_pwm(TIM3);
-
-  led_channels[0].pwm_reg = (volatile uint16_t *)&TIM_CCR1(TIM3);
-  led_channels[1].pwm_reg = (volatile uint16_t *)&TIM_CCR2(TIM3);
-  led_channels[2].pwm_reg = (volatile uint16_t *)&TIM_CCR3(TIM3);
-  led_channels[3].pwm_reg = (volatile uint16_t *)&TIM_CCR4(TIM3);
-#else
-#  error "No platform defined for assigning pwm channels"
-#endif
+void led_set_all_ch_override(uint8_t val) {
+  all_ch_override = val;
 }
 
 void led_ch_update(struct led_channel *ch) {
-  *ch->pwm_reg = gamma_lut[ch->value];
+  if (all_ch_override == 0) {
+    *ch->pwm_reg = 0;
+  } else {
+    *ch->pwm_reg = gamma_lut[ch->value];
+  }
 }
 
 void led_update_all_channels() {

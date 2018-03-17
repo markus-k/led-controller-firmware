@@ -22,9 +22,30 @@
 #include <wolfmqtt/mqtt_client.h>
 #include <winc1500/socket/include/socket.h>
 
-#define MQTT_TX_BUF_SIZE 64
-#define MQTT_RX_BUF_SIZE 64
+/*
+ * mqtt topic structure overview:
+ *
+ * subscribed topics:
+ * - <base>/all/set: turn all channels on/off, values 0 or 1
+ * - <base>/ch[1-12]/brightness/set: channel brightness, values 0 to 255
+ * - <base>/grp[1-4]/rgb/set: rgb brightness, three 0-255 values, comma separated
+ *
+ * published topics:
+ * - <base>/all/get: current status, 0 or 1
+ * - <base>/ch[1-12]/brightness/get: channel brightness, values 0 to 255
+ * - <base>/grp[1-4]/rgb/get: rgb brightness, three 0-255 values, comma separated
+ */
+
+#define MQTT_TOPIC_PREFIX               "led-controller/"
+#define MQTT_TOPIC_ALL_SET              MQTT_TOPIC_PREFIX "all/set"
+#define MQTT_TOPIC_CH_BR_SET(ch)        MQTT_TOPIC_PREFIX "ch" #ch "/brightness/set"
+#define MQTT_TOPIC_GRP_RGB_SET(grp)     MQTT_TOPIC_PREFIX "grp" #grp "/rgb/set"
+
+#define MQTT_TX_BUF_SIZE 256
+#define MQTT_RX_BUF_SIZE 256
 #define MQTT_RX_OVF_BUF_SIZE (MQTT_RX_BUF_SIZE)
+
+#define MQTT_MAX_TOPIC_LEN 64
 
 typedef enum {
   MQTT_SOCK_STATE_INIT = 0,
@@ -33,6 +54,7 @@ typedef enum {
   MQTT_SOCK_STATE_CONNECTED,
   MQTT_SOCK_STATE_READING,
   MQTT_SOCK_STATE_READ_DONE,
+  MQTT_SOCK_STATE_READ_TIMEOUT,
   MQTT_SOCK_STATE_READ_ERR,
   MQTT_SOCK_STATE_WRITING,
   MQTT_SOCK_STATE_WRITE_DONE,
@@ -44,6 +66,9 @@ typedef enum {
   MQTT_CONN_STATE_NETCONNECT,
   MQTT_CONN_STATE_CONNECT,
   MQTT_CONN_STATE_CONNECTED,
+  MQTT_CONN_STATE_SUBSCRIBE,
+  MQTT_CONN_STATE_WAIT,
+  MQTT_CONN_STATE_WAIT_PING,
   MQTT_CONN_STATE_FAILED
 } mqtt_conn_state_t;
 
@@ -79,11 +104,15 @@ struct mqtt_context {
   MqttClient client;
   MqttConnect connect;
   MqttNet net;
+  MqttTopic topics[4];
+  MqttSubscribe sub;
 
   uint8_t tx_buf[MQTT_TX_BUF_SIZE];
   uint8_t rx_buf[MQTT_RX_BUF_SIZE];
 
   uint16_t packet_id;
+  uint8_t sub_state;
+  uint8_t pub_state;
   mqtt_conn_state_t conn_state;
 };
 

@@ -141,7 +141,7 @@ LDFLAGS += -L $(TOOLCHAIN_LIBDIR)/gcc/arm-none-eabi/6.3.1/hard/ \
            -L $(TOOLCHAIN_LIBDIR)/hard/
 endif
 
-LDFLAGS += -L $(TOOLCHAIN_LIBDIR)/thumb/
+LDFLAGS += -L $(TOOLCHAIN_LIBDIR)/thumb/v7-m/ --specs=nano.specs
 
 DBGFLAGS := -g -O0 -DDEBUG=1
 
