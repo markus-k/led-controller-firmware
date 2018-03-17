@@ -16,6 +16,7 @@
  */
 
 #include <libopencm3/cm3/nvic.h>
+#include <libopencm3/cm3/scb.h>
 #include <libopencm3/cm3/systick.h>
 #include <libopencm3/stm32/dbgmcu.h>
 #include <libopencm3/stm32/dma.h>
@@ -34,6 +35,34 @@
 #include "led.h"
 #include "mqtt.h"
 #include "wifi.h"
+
+static void debug_fault() {
+  DBG("SCB_CFSR:  0x%x", SCB_CFSR);
+  DBG("SCB_HFSR:  0x%x", SCB_HFSR);
+
+  if (SCB_CFSR & SCB_CFSR_MMARVALID) {
+    DBG("SCB_MMFAR: 0x%x", SCB_MMFAR);
+  }
+  if (SCB_CFSR & SCB_CFSR_BFARVALID) {
+    DBG("SCB_BFAR:  0x%x", SCB_BFAR);
+  }
+  while (1);
+}
+
+void bus_fault_handler() {
+  DBG("!! BUS FAULT !!");
+  debug_fault();
+}
+
+void usage_fault_handler() {
+  DBG("!! USAGE FAULT !!");
+  debug_fault();
+}
+
+void hard_fault_handler() {
+  DBG("!! HARD FAULT !!");
+  debug_fault();
+}
 
 
 void demo_fading() {

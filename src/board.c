@@ -16,6 +16,7 @@
  */
 
 #include <libopencm3/cm3/nvic.h>
+#include <libopencm3/cm3/scb.h>
 #include <libopencm3/stm32/dbgmcu.h>
 #include <libopencm3/stm32/exti.h>
 #include <libopencm3/stm32/flash.h>
@@ -192,6 +193,9 @@ void board_init() {
 
   // enable debugging during sleep
   DBGMCU_CR |= DBGMCU_CR_SLEEP;
+
+  // enable additional faults
+  SCB_SHCSR |= SCB_SHCSR_USGFAULTENA | SCB_SHCSR_BUSFAULTENA | SCB_SHCSR_MEMFAULTENA;
 
   gpio_set(BOARD_LED_FRONT_PORT, BOARD_LED_FRONT_GREEN_PIN);
   gpio_set(BOARD_LED_ONBOARD_PORT, BOARD_LED_ONBOARD_PIN);
