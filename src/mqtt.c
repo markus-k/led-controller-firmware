@@ -32,10 +32,19 @@ static const char *sock_state_strings[] = {
   "MQTT_SOCK_STATE_INIT",
   "MQTT_SOCK_STATE_CONNECTING",
   "MQTT_SOCK_STATE_CONNECT_ERR",
-  "MQTT_SOCK_STATE_CONNECTED",
-  "MQTT_SOCK_STATE_READING",
-  "MQTT_SOCK_STATE_READ_DONE",
-  "MQTT_SOCK_STATE_READ_ERR",
+  "MQTT_SOCK_STATE_CONNECTED"
+};
+
+static const char *sock_read_state_strings[] = {
+  "MQTT_READ_STATE_IDLE",
+  "MQTT_READ_STATE_READING",
+  "MQTT_READ_STATE_READ_DONE",
+  "MQTT_READ_STATE_READ_TIMEOUT",
+  "MQTT_READ_STATE_READ_ERR"
+};
+
+static const char *sock_write_state_strings[] = {
+  "MQTT_WRITE_STATE_IDLE",
   "MQTT_SOCK_STATE_WRITING",
   "MQTT_SOCK_STATE_WRITE_DONE",
   "MQTT_SOCK_STATE_WRITE_ERR"
@@ -170,10 +179,12 @@ static int mqtt_net_read(void *context, uint8_t *buf, int len, int timeout) {
   int ret;
   int rc = 0;
 
-  //DBG("mqtt_net: read (%s, %u bytes)", sock_state_strings[sock_ctx->state], len);
+#ifdef MQTT_VERBOSE_DEBUG
+  DBG("mqtt_net: read (%s, %u bytes)", sock_read_state_strings[sock_ctx->read_state], len);
+#endif
 
-  switch (sock_ctx->state) {
-  case MQTT_SOCK_STATE_CONNECTED:
+  switch (sock_ctx->read_state) {
+  case MQTT_READ_STATE_IDLE:
     ret = recv_wrapper(sock_ctx, buf, len, timeout);
     if (ret > 0) {
       // done, no change to state
@@ -183,22 +194,24 @@ static int mqtt_net_read(void *context, uint8_t *buf, int len, int timeout) {
       rc = MQTT_CODE_ERROR_NETWORK;
     } else {
       DBG("mqtt_net: waiting for read");
-      sock_ctx->state = MQTT_SOCK_STATE_READING;
+      sock_ctx->read_state = MQTT_READ_STATE_READING;
     }
     break;
 
-  case MQTT_SOCK_STATE_READING:
+  case MQTT_READ_STATE_READING:
     rc = MQTT_CODE_CONTINUE;
     break;
 
-  case MQTT_SOCK_STATE_READ_DONE:
+  case MQTT_READ_STATE_READ_DONE:
      ret = recv_wrapper(sock_ctx, buf, len, 0);
      if (ret > 0) {
-       sock_ctx->state = MQTT_SOCK_STATE_CONNECTED;
+       sock_ctx->read_state = MQTT_READ_STATE_IDLE;
 
+#ifdef MQTT_VERBOSE_DEBUG
        for (int i = 0; i < len; i++) {
 	 DBG("recv data: 0x%x", buf[i]);
        }
+#endif
 
        rc = ret;
      } else if (ret < 0) {
@@ -206,22 +219,22 @@ static int mqtt_net_read(void *context, uint8_t *buf, int len, int timeout) {
        rc = MQTT_CODE_ERROR_NETWORK;
      } else {
        DBG("mqtt_net: still waiting for read");
-       sock_ctx->state = MQTT_SOCK_STATE_READING;
+       sock_ctx->read_state = MQTT_READ_STATE_READING;
      }
 
      break;
 
-  case MQTT_SOCK_STATE_READ_TIMEOUT:
+  case MQTT_READ_STATE_READ_TIMEOUT:
     rc = MQTT_CODE_ERROR_TIMEOUT;
-    sock_ctx->state = MQTT_SOCK_STATE_CONNECTED;
+    sock_ctx->read_state = MQTT_READ_STATE_IDLE;
     break;
 
-  case MQTT_SOCK_STATE_READ_ERR:
+  case MQTT_READ_STATE_READ_ERR:
     rc = MQTT_CODE_ERROR_NETWORK;
     break;
 
   default:
-    DBG("mqtt_net: read in invalid socket state: %s", sock_state_strings[sock_ctx->state]);
+    DBG("mqtt_net: read in invalid socket state: %s", sock_read_state_strings[sock_ctx->read_state]);
     rc = 0;
     break;
   }
@@ -234,12 +247,14 @@ static int mqtt_net_write(void *context, const uint8_t *buf, int len, int timeou
   int ret;
   int rc;
 
-  //DBG("mqtt_net: write (%s, %u bytes)", sock_state_strings[sock_ctx->state], len);
+#ifdef MQTT_VERBOSE_DEBUG
+  DBG("mqtt_net: write (%s, %u bytes)", sock_write_state_strings[sock_ctx->write_state], len);
+#endif
 
-  switch (sock_ctx->state) {
-  case MQTT_SOCK_STATE_CONNECTED:
+  switch (sock_ctx->write_state) {
+  case MQTT_WRITE_STATE_IDLE:
     // timeout?
-    sock_ctx->state = MQTT_SOCK_STATE_WRITING;
+    sock_ctx->write_state = MQTT_WRITE_STATE_WRITING;
     ret = send(sock_ctx->sock, (uint8_t *)buf, len, 0);
     if (ret != SOCK_ERR_NO_ERROR) {
       DBG("mqtt_net: write failed: %d", ret);
@@ -249,21 +264,21 @@ static int mqtt_net_write(void *context, const uint8_t *buf, int len, int timeou
     }
     break;
 
-  case MQTT_SOCK_STATE_WRITING:
+  case MQTT_WRITE_STATE_WRITING:
     rc = MQTT_CODE_CONTINUE;
     break;
 
-  case MQTT_SOCK_STATE_WRITE_DONE:
-    sock_ctx->state = MQTT_SOCK_STATE_CONNECTED;
+  case MQTT_WRITE_STATE_WRITE_DONE:
+    sock_ctx->write_state = MQTT_WRITE_STATE_IDLE;
     rc = len;
     break;
 
-  case MQTT_SOCK_STATE_WRITE_ERR:
+  case MQTT_WRITE_STATE_WRITE_ERR:
     rc = MQTT_CODE_ERROR_NETWORK;
     break;
 
   default:
-    DBG("mqtt_net: write in invalid socket state: %s", sock_state_strings[sock_ctx->state]);
+    DBG("mqtt_net: write in invalid socket state: %s", sock_write_state_strings[sock_ctx->write_state]);
     rc = 0;
     break;
   }
@@ -296,6 +311,7 @@ static void handle_socket_connect(struct mqtt_sock_context *sock_ctx, tstrSocket
 static void handle_socket_recv(struct mqtt_sock_context *sock_ctx, tstrSocketRecvMsg *recv_msg) {
   int16_t buf_len = recv_msg->s16BufferSize;
   if (recv_msg->s16BufferSize > 0) {
+#ifdef MQTT_VERBOSE_DEBUG
     DBG("sock: recv %u, rem %u, buf: 0x%x", buf_len, recv_msg->u16RemainingSize, recv_msg->pu8Buffer);
 
     for (int i = 0; i < buf_len; i++) {
@@ -303,6 +319,7 @@ static void handle_socket_recv(struct mqtt_sock_context *sock_ctx, tstrSocketRec
     }
 
     DBG("sock: copying %u bytes to ovf_buf, len: %u", buf_len, sock_ctx->rx_ovf_len);
+#endif
 
     if (buf_len + sock_ctx->rx_ovf_len > MQTT_RX_OVF_BUF_SIZE) {
       DBG("sock: ERROR: ovf buffer full, discarding data!");
@@ -314,23 +331,23 @@ static void handle_socket_recv(struct mqtt_sock_context *sock_ctx, tstrSocketRec
     sock_ctx->rx_ovf_len += buf_len;
 
     if (recv_msg->u16RemainingSize > 0) {
-      sock_ctx->state = MQTT_SOCK_STATE_READING;
+      sock_ctx->read_state = MQTT_READ_STATE_READING;
     } else {
-      sock_ctx->state = MQTT_SOCK_STATE_READ_DONE;
+      sock_ctx->read_state = MQTT_READ_STATE_READ_DONE;
     }
   } else if (buf_len == 0) {
     DBG("sock: socket closed");
-    // we've been disconnected ?
-    sock_ctx->state = MQTT_SOCK_STATE_READ_ERR;
+    // we've been disconnected ? TODO
+    sock_ctx->read_state = MQTT_READ_STATE_READ_ERR;
   } else {
     if (buf_len == SOCK_ERR_TIMEOUT) {
       DBG("sock: recv timeout");
-      sock_ctx->state = MQTT_SOCK_STATE_READ_TIMEOUT;
+      sock_ctx->read_state = MQTT_READ_STATE_READ_TIMEOUT;
 
       // else if (buf_len == SOCK_ERR_CONN_ABORTED) {}
     } else {
       DBG("sock: recv err: %d", buf_len);
-      sock_ctx->state = MQTT_SOCK_STATE_READ_ERR;
+      sock_ctx->read_state = MQTT_READ_STATE_READ_ERR;
     }
   }
 }
@@ -338,7 +355,7 @@ static void handle_socket_recv(struct mqtt_sock_context *sock_ctx, tstrSocketRec
 static void handle_socket_send(struct mqtt_sock_context *sock_ctx) {
   DBG("sock: send");
 
-  sock_ctx->state = MQTT_SOCK_STATE_WRITE_DONE;
+  sock_ctx->write_state = MQTT_WRITE_STATE_WRITE_DONE;
 }
 
 void mqtt_socket_handler(SOCKET sock, uint8_t msg_type, void *msg) {
@@ -373,12 +390,6 @@ void mqtt_socket_handler(SOCKET sock, uint8_t msg_type, void *msg) {
 }
 
 /* ---------- mqtt functions ---------- */
-
-static uint16_t mqtt_new_packet_id() {
-  static uint16_t last_pid = 0;
-
-  return last_pid++;
-}
 
 static int compare_topic(MqttMessage *msg, const char *topic) {
   return memcmp(msg->topic_name, topic, msg->topic_name_len) == 0;
@@ -546,7 +557,7 @@ void mqtt_poll(struct mqtt_context *context) {
     memset(&context->sub, 0, sizeof(MqttSubscribe));
     context->sub.topics = context->topics;
     context->sub.topic_count = sizeof(context->topics) / sizeof(context->topics[0]);
-    context->sub.packet_id  = mqtt_new_packet_id();
+    context->sub.packet_id = ++context->packet_id;
 
     context->conn_state = MQTT_CONN_STATE_SUBSCRIBE;
 

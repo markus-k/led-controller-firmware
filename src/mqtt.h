@@ -47,19 +47,29 @@
 
 #define MQTT_MAX_TOPIC_LEN 64
 
+//#define MQTT_VERBOSE_DEBUG
+
 typedef enum {
   MQTT_SOCK_STATE_INIT = 0,
   MQTT_SOCK_STATE_CONNECTING,
   MQTT_SOCK_STATE_CONNECT_ERR,
-  MQTT_SOCK_STATE_CONNECTED,
-  MQTT_SOCK_STATE_READING,
-  MQTT_SOCK_STATE_READ_DONE,
-  MQTT_SOCK_STATE_READ_TIMEOUT,
-  MQTT_SOCK_STATE_READ_ERR,
-  MQTT_SOCK_STATE_WRITING,
-  MQTT_SOCK_STATE_WRITE_DONE,
-  MQTT_SOCK_STATE_WRITE_ERR
+  MQTT_SOCK_STATE_CONNECTED
 } mqtt_sock_state_t;
+
+typedef enum {
+  MQTT_WRITE_STATE_IDLE = 0,
+  MQTT_WRITE_STATE_WRITING,
+  MQTT_WRITE_STATE_WRITE_DONE,
+  MQTT_WRITE_STATE_WRITE_ERR
+} mqtt_write_state_t;
+
+typedef enum {
+  MQTT_READ_STATE_IDLE = 0,
+  MQTT_READ_STATE_READING,
+  MQTT_READ_STATE_READ_DONE,
+  MQTT_READ_STATE_READ_TIMEOUT,
+  MQTT_READ_STATE_READ_ERR
+} mqtt_read_state_t;
 
 typedef enum {
   MQTT_CONN_STATE_INIT = 0,
@@ -77,6 +87,8 @@ struct mqtt_sock_context {
   struct sockaddr_in addr;
 
   mqtt_sock_state_t state;
+  mqtt_read_state_t read_state;
+  mqtt_write_state_t write_state;
 
   /**
    * temporary buffer for storing recieved data
