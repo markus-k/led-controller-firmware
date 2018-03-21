@@ -45,10 +45,21 @@
 typedef void (*board_exti_func_t)();
 
 typedef enum {
-  BOARD_LED_ONBOARD,
+  BOARD_LED_ONBOARD = 0,
   BOARD_LED_FRONT_RED,
-  BOARD_LED_FRONT_GREEN
+  BOARD_LED_FRONT_GREEN,
+  BOARD_LED_NUM,
 } board_led_t;
+
+#define BOARD_BLINKRATE_PRESCALER_SLOW 1000
+#define BOARD_BLINKRATE_PRESCALER_FAST 200
+
+typedef enum {
+  BOARD_BLINKRATE_OFF = 0,
+  BOARD_BLINKRATE_ON,
+  BOARD_BLINKRATE_SLOW,
+  BOARD_BLINKRATE_FAST
+} board_blinkrate_t;
 
 void board_init();
 void board_register_winc_irq(board_exti_func_t func);

@@ -25,7 +25,24 @@
 
 #include "board.h"
 
-static volatile board_exti_func_t winc_exti_func;
+static volatile board_exti_func_t winc_exti_func = 0;
+static volatile board_blinkrate_t blinkrates[BOARD_LED_NUM] = {
+  BOARD_BLINKRATE_SLOW,
+  BOARD_BLINKRATE_ON,
+  BOARD_BLINKRATE_OFF
+};
+
+static const uint16_t led_gpio_pins[BOARD_LED_NUM] = {
+  BOARD_LED_ONBOARD_PIN,
+  BOARD_LED_FRONT_GREEN_PIN,
+  BOARD_LED_FRONT_RED_PIN
+};
+
+static const uint32_t led_gpio_ports[BOARD_LED_NUM] = {
+  BOARD_LED_ONBOARD_PORT,
+  BOARD_LED_FRONT_PORT,
+  BOARD_LED_FRONT_PORT
+};
 
 /**
  * set up rcc to 36MHz sysclk from HSI
@@ -169,20 +186,58 @@ void board_register_winc_irq(board_exti_func_t func) {
   winc_exti_func = func;
 }
 
+static void update_status_leds() {
+  static uint16_t prescaler_slow = 0;
+  static uint16_t prescaler_fast = 0;
+  uint8_t toggle_slow = 0;
+  uint8_t toggle_fast = 0;
+
+  if (prescaler_slow == BOARD_BLINKRATE_PRESCALER_SLOW) {
+    prescaler_slow = 0;
+    toggle_slow = 1;
+  }
+  if (prescaler_fast == BOARD_BLINKRATE_PRESCALER_FAST) {
+    prescaler_fast = 0;
+    toggle_fast = 1;
+  }
+
+  for (int led = 0; led < BOARD_LED_NUM; led++) {
+    uint32_t port = led_gpio_ports[led];
+    uint16_t pin = led_gpio_pins[led];
+
+    switch (blinkrates[led]) {
+    case BOARD_BLINKRATE_OFF:
+      gpio_clear(port, pin);
+      break;
+    case BOARD_BLINKRATE_ON:
+      gpio_set(port, pin);
+      break;
+    case BOARD_BLINKRATE_SLOW:
+      if (toggle_slow) {
+	gpio_toggle(port, pin);
+      }
+      break;
+    case BOARD_BLINKRATE_FAST:
+      if (toggle_fast) {
+	gpio_toggle(port, pin);
+      }
+      break;
+    }
+  }
+
+  prescaler_fast++;
+  prescaler_slow++;
+}
+
 /**
  * called every 1ms by clock.c
  */
 void board_tick() {
-  static uint32_t prescaler = 0;
+  update_status_leds();
+}
 
-  if (prescaler == 1000) {
-    gpio_toggle(BOARD_LED_ONBOARD_PORT, BOARD_LED_ONBOARD_PIN);
-    gpio_toggle(BOARD_LED_FRONT_PORT, BOARD_LED_FRONT_RED_PIN);
-
-    prescaler = 0;
-  }
-
-  prescaler++;
+void board_set_blinkrate(board_led_t led, board_blinkrate_t blinkrate) {
+  blinkrates[led] = blinkrate;
 }
 
 void board_init() {
@@ -196,7 +251,4 @@ void board_init() {
 
   // enable additional faults
   SCB_SHCSR |= SCB_SHCSR_USGFAULTENA | SCB_SHCSR_BUSFAULTENA | SCB_SHCSR_MEMFAULTENA;
-
-  gpio_set(BOARD_LED_FRONT_PORT, BOARD_LED_FRONT_GREEN_PIN);
-  gpio_set(BOARD_LED_ONBOARD_PORT, BOARD_LED_ONBOARD_PIN);
 }
