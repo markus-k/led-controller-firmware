@@ -417,9 +417,11 @@ static int mqtt_cb(MqttClient *client, MqttMessage *msg, uint8_t msg_new, uint8_
     }
 
     if (compare_topic(msg, MQTT_TOPIC_ALL_SET)) {
-      int val = *msg->buffer == '0' ? 0 : 1;
+      int val = msg->buffer[0] == '0' ? 0 : 1;
       DBG("mqtt: got set all to %d", val);
       led_set_all_ch_override(val);
+
+      mqtt_publish(context, MQTT_TOPIC_ALL_GET, val == 0 ? "0" : "1");
     } else if (compare_topic(msg, MQTT_TOPIC_CH_BR_SET(1))) {
       uint8_t val;
       msg2str(msg, msg_str);
@@ -466,6 +468,9 @@ void mqtt_init(struct mqtt_context *context) {
     const char *code_str = MqttClient_ReturnCodeToString(ret);
     DBG("mqtt: init failed: %s (%d)", code_str, ret);
   }
+
+  // set the client context after initialization
+  context->client.ctx = context;
 }
 
 void mqtt_connect(struct mqtt_context *context) {
@@ -474,26 +479,117 @@ void mqtt_connect(struct mqtt_context *context) {
   context->conn_state = MQTT_CONN_STATE_NETCONNECT;
 }
 
-void mqtt_publish(struct mqtt_context *context, const char *topic, const char *msg) {
-  int ret;
-  MqttPublish pub;
+/* ---------- mqtt publish buffering ---------- */
 
-  memset(&pub, 0, sizeof(MqttPublish));
+static int queue_check_full(struct mqtt_pub_buffer *queue) {
+  return queue->start == queue->end && queue->filled;
+}
 
-  pub.buffer = msg;
-  pub.total_len = strlen(msg);
-  pub.topic_name = topic;
-  pub.packet_id = ++context->packet_id;
-  pub.duplicate = 0;
-  pub.retain = 0;
+static int queue_check_empty(struct mqtt_pub_buffer *queue) {
+  return queue->start == queue->end && !queue->filled;
+}
 
-  ret = MqttClient_Publish(&context->client, &pub);
-  if (ret != MQTT_CODE_SUCCESS) {
-    const char *code_str = MqttClient_ReturnCodeToString(ret);
-    DBG("mqtt: publish failed: %s (%d)", code_str, ret);
-  } else {
-    DBG("mqtt: publish successful");
+static int enqueue_message(struct mqtt_pub_buffer *queue, struct mqtt_pub_msg **pub) {
+  int pos;
+
+  if (queue_check_full(queue)) {
+    return -1;
   }
+
+  pos = queue->end++;
+
+  if (queue->end >= MQTT_PUBLISH_QUEUE_LEN) {
+    queue->end = 0;
+  }
+
+  queue->filled = 1;
+
+  *pub = &queue->buffer[pos];
+
+  return 0;
+}
+
+static struct mqtt_pub_msg *dequeue_message(struct mqtt_pub_buffer *queue) {
+  struct mqtt_pub_msg *pub;
+
+  if (queue_check_empty(queue)) {
+    return NULL;
+  }
+
+  pub = &queue->buffer[queue->start++];
+
+  if (queue->start >= MQTT_PUBLISH_QUEUE_LEN) {
+    queue->start = 0;
+  }
+
+  if (queue->start == queue->end) {
+    queue->filled = 0;
+  }
+
+  return pub;
+}
+
+static struct mqtt_pub_msg *queue_peek_message(struct mqtt_pub_buffer *queue) {
+  if (queue_check_empty(queue)) {
+    return NULL;
+  }
+
+  return &queue->buffer[queue->start];
+}
+
+static void mqtt_publish_poll(struct mqtt_context *context) {
+  struct mqtt_pub_msg *msg;
+  int ret;
+
+  msg = queue_peek_message(&context->pub_queue);
+
+  if (!msg) {
+    // this shouldn't happen though
+    DBG("mqtt: publish message gone?");
+    return;
+  }
+
+  ret = MqttClient_Publish(&context->client, &msg->pub);
+  if (ret == MQTT_CODE_SUCCESS) {
+    DBG("mqtt: publish successful");
+
+    // remove message from queue
+    dequeue_message(&context->pub_queue);
+
+    context->conn_state = MQTT_CONN_STATE_WAIT;
+  } else if (ret != MQTT_CODE_CONTINUE) {
+    const char *code_str = MqttClient_ReturnCodeToString(ret);
+    DBG("mqtt: netconnect failed: %s (%d)", code_str, ret);
+
+    context->conn_state = MQTT_CONN_STATE_WAIT;
+  }
+}
+
+void mqtt_publish(struct mqtt_context *context, const char *topic, uint8_t *payload) {
+  int ret;
+  struct mqtt_pub_msg *msg;
+  size_t len = strlen(payload);
+
+  if (enqueue_message(&context->pub_queue, &msg)) {
+    DBG("mqtt: publish queue full!");
+    return;
+  }
+
+  memset(msg, 0, sizeof(MqttPublish));
+
+  if (len > MQTT_PUBLISH_PAYLOAD_LEN) {
+    memcpy(msg->payload, payload, MQTT_PUBLISH_PAYLOAD_LEN);
+  } else {
+    strcpy(msg->payload, payload);
+  }
+
+  msg->pub.buffer = msg->payload;
+  msg->pub.total_len = len;
+  msg->pub.topic_name = topic;
+  msg->pub.topic_name_len = strlen(topic);
+  msg->pub.packet_id = ++context->packet_id;
+  msg->pub.duplicate = 0;
+  msg->pub.retain = 0;
 }
 
 void mqtt_poll(struct mqtt_context *context) {
@@ -503,6 +599,7 @@ void mqtt_poll(struct mqtt_context *context) {
   switch (context->conn_state) {
   case MQTT_CONN_STATE_INIT:
     memset(&context->connect, 0, sizeof(MqttConnect));
+    memset(&context->pub_queue, 0, sizeof(struct mqtt_pub_buffer));
 
     context->connect.client_id = "led-controller";
     context->connect.keep_alive_sec = 10;
@@ -588,6 +685,10 @@ void mqtt_poll(struct mqtt_context *context) {
       const char *code_str = MqttClient_ReturnCodeToString(ret);
       DBG("mqtt: waitmessage failed: %s (%d)", code_str, ret);
     }
+
+    if (!queue_check_empty(&context->pub_queue)) {
+      context->conn_state = MQTT_CONN_STATE_PUBLISH;
+    }
     break;
 
   case MQTT_CONN_STATE_WAIT_PING:
@@ -600,6 +701,10 @@ void mqtt_poll(struct mqtt_context *context) {
       const char *code_str = MqttClient_ReturnCodeToString(ret);
       DBG("mqtt: ping failed: %s (%d)", code_str, ret);
     }
+    break;
+
+  case MQTT_CONN_STATE_PUBLISH:
+    mqtt_publish_poll(context);
     break;
 
   case MQTT_CONN_STATE_FAILED:

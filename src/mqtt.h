@@ -28,24 +28,32 @@
  * subscribed topics:
  * - <base>/all/set: turn all channels on/off, values 0 or 1
  * - <base>/ch[1-12]/brightness/set: channel brightness, values 0 to 255
- * - <base>/grp[1-4]/rgb/set: rgb brightness, three 0-255 values, comma separated
+ * - <base>/grp[1-4]/rgb/set: rgb color, three 0-255 values, comma separated
+ * - <base>/grp[1-4]/brightness/set: additional dimming factor for group: 0-255
  *
  * published topics:
  * - <base>/all/get: current status, 0 or 1
  * - <base>/ch[1-12]/brightness/get: channel brightness, values 0 to 255
- * - <base>/grp[1-4]/rgb/get: rgb brightness, three 0-255 values, comma separated
+ * - <base>/grp[1-4]/rgb/get: rgb color, three 0-255 values, comma separated
+ * - <base>/grp[1-4]/brightness/get: additional dimming factor for group: 0-255
  */
 
 #define MQTT_TOPIC_PREFIX               "led-controller/"
 #define MQTT_TOPIC_ALL_SET              MQTT_TOPIC_PREFIX "all/set"
+#define MQTT_TOPIC_ALL_GET              MQTT_TOPIC_PREFIX "all/get"
 #define MQTT_TOPIC_CH_BR_SET(ch)        MQTT_TOPIC_PREFIX "ch" #ch "/brightness/set"
+#define MQTT_TOPIC_CH_BR_GET(ch)        MQTT_TOPIC_PREFIX "ch" #ch "/brightness/get"
 #define MQTT_TOPIC_GRP_RGB_SET(grp)     MQTT_TOPIC_PREFIX "grp" #grp "/rgb/set"
+#define MQTT_TOPIC_GRP_RGB_GET(grp)     MQTT_TOPIC_PREFIX "grp" #grp "/rgb/get"
 
 #define MQTT_TX_BUF_SIZE 256
 #define MQTT_RX_BUF_SIZE 256
 #define MQTT_RX_OVF_BUF_SIZE (MQTT_RX_BUF_SIZE)
 
 #define MQTT_MAX_TOPIC_LEN 64
+
+#define MQTT_PUBLISH_PAYLOAD_LEN 32
+#define MQTT_PUBLISH_QUEUE_LEN 8
 
 //#define MQTT_VERBOSE_DEBUG
 
@@ -79,6 +87,7 @@ typedef enum {
   MQTT_CONN_STATE_SUBSCRIBE,
   MQTT_CONN_STATE_WAIT,
   MQTT_CONN_STATE_WAIT_PING,
+  MQTT_CONN_STATE_PUBLISH,
   MQTT_CONN_STATE_FAILED
 } mqtt_conn_state_t;
 
@@ -111,6 +120,21 @@ struct mqtt_sock_context {
   uint16_t rx_ovf_len;
 };
 
+struct mqtt_pub_msg {
+  MqttPublish pub;
+  uint8_t payload[MQTT_PUBLISH_PAYLOAD_LEN];
+};
+
+/**
+ * ring buffer for queueing publish messages
+ */
+struct mqtt_pub_buffer {
+  struct mqtt_pub_msg buffer[MQTT_PUBLISH_QUEUE_LEN];
+  uint8_t start;
+  uint8_t end;
+  uint8_t filled;
+};
+
 struct mqtt_context {
   struct mqtt_sock_context sock_context;
   MqttClient client;
@@ -125,11 +149,14 @@ struct mqtt_context {
   uint16_t packet_id;
   uint64_t last_ping;
   mqtt_conn_state_t conn_state;
+
+  struct mqtt_pub_buffer pub_queue;
 };
 
 void mqtt_socket_handler(SOCKET sock, uint8_t msg_type, void *msg);
 void mqtt_init(struct mqtt_context *context);
 void mqtt_connect(struct mqtt_context *context);
+void mqtt_publish(struct mqtt_context *context, const char *topic, uint8_t *payload);
 void mqtt_poll(struct mqtt_context *context);
 
 #endif
