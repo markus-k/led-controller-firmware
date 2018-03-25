@@ -22,30 +22,6 @@
 #include <wolfmqtt/mqtt_client.h>
 #include <winc1500/socket/include/socket.h>
 
-/*
- * mqtt topic structure overview:
- *
- * subscribed topics:
- * - <base>/all/set: turn all channels on/off, values 0 or 1
- * - <base>/ch[1-12]/brightness/set: channel brightness, values 0 to 255
- * - <base>/grp[1-4]/rgb/set: rgb color, three 0-255 values, comma separated
- * - <base>/grp[1-4]/brightness/set: additional dimming factor for group: 0-255
- *
- * published topics:
- * - <base>/all/get: current status, 0 or 1
- * - <base>/ch[1-12]/brightness/get: channel brightness, values 0 to 255
- * - <base>/grp[1-4]/rgb/get: rgb color, three 0-255 values, comma separated
- * - <base>/grp[1-4]/brightness/get: additional dimming factor for group: 0-255
- */
-
-#define MQTT_TOPIC_PREFIX               "led-controller/"
-#define MQTT_TOPIC_ALL_SET              MQTT_TOPIC_PREFIX "all/set"
-#define MQTT_TOPIC_ALL_GET              MQTT_TOPIC_PREFIX "all/get"
-#define MQTT_TOPIC_CH_BR_SET(ch)        MQTT_TOPIC_PREFIX "ch" #ch "/brightness/set"
-#define MQTT_TOPIC_CH_BR_GET(ch)        MQTT_TOPIC_PREFIX "ch" #ch "/brightness/get"
-#define MQTT_TOPIC_GRP_RGB_SET(grp)     MQTT_TOPIC_PREFIX "grp" #grp "/rgb/set"
-#define MQTT_TOPIC_GRP_RGB_GET(grp)     MQTT_TOPIC_PREFIX "grp" #grp "/rgb/get"
-
 #define MQTT_TX_BUF_SIZE 256
 #define MQTT_RX_BUF_SIZE 256
 #define MQTT_RX_OVF_BUF_SIZE (MQTT_RX_BUF_SIZE)
@@ -122,6 +98,7 @@ struct mqtt_sock_context {
 
 struct mqtt_pub_msg {
   MqttPublish pub;
+  char topic[MQTT_MAX_TOPIC_LEN];
   uint8_t payload[MQTT_PUBLISH_PAYLOAD_LEN];
 };
 
@@ -140,7 +117,7 @@ struct mqtt_context {
   MqttClient client;
   MqttConnect connect;
   MqttNet net;
-  MqttTopic topics[4];
+  MqttTopic topics[8];
   MqttSubscribe sub;
 
   uint8_t tx_buf[MQTT_TX_BUF_SIZE];

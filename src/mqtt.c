@@ -19,6 +19,7 @@
 #include <stdlib.h>
 
 #include "mqtt.h"
+#include "mqtt_device.h"
 #include "debug.h"
 #include "states.h"
 #include "led.h"
@@ -411,38 +412,11 @@ static int mqtt_cb(MqttClient *client, MqttMessage *msg, uint8_t msg_new, uint8_
 
   DBG("mqtt: cb: topic: %s, new: %u, done: %u", topic_name, msg_new, msg_done);
 
-  if (msg_new) {
-    for (int i = 0; i < msg->buffer_len; i++) {
-      DBG("mqtt: msg 0x%x", msg->buffer[i]);
-    }
+  if (msg_new && msg_done) {
+    // ignore any messages that don't fit.. for now
+    msg2str(msg, msg_str);
 
-    if (compare_topic(msg, MQTT_TOPIC_ALL_SET)) {
-      int val = msg->buffer[0] == '0' ? 0 : 1;
-      DBG("mqtt: got set all to %d", val);
-      led_set_all_ch_override(val);
-
-      mqtt_publish(context, MQTT_TOPIC_ALL_GET, val == 0 ? "0" : "1");
-    } else if (compare_topic(msg, MQTT_TOPIC_CH_BR_SET(1))) {
-      uint8_t val;
-      msg2str(msg, msg_str);
-      val = strtoul(msg_str, NULL, 10);
-      led_channels[0].value = val;
-    } else if (compare_topic(msg, MQTT_TOPIC_CH_BR_SET(2))) {
-      uint8_t val;
-      msg2str(msg, msg_str);
-      val = strtoul(msg_str, NULL, 10);
-      led_channels[1].value = val;
-    } else if (compare_topic(msg, MQTT_TOPIC_GRP_RGB_SET(1))) {
-      uint8_t r, g, b;
-      char *end = msg_str;
-      msg2str(msg, msg_str);
-      r = strtoul(end, &end, 10); end++;
-      g = strtoul(end, &end, 10); end++;
-      b = strtoul(end, &end, 10);
-      led_channels[0].value = r;
-      led_channels[1].value = g;
-      led_channels[2].value = b;
-    }
+    mqtt_dev_parse_message(context, topic_name, msg_str);
   }
 
   return MQTT_CODE_SUCCESS;
@@ -583,10 +557,12 @@ void mqtt_publish(struct mqtt_context *context, const char *topic, uint8_t *payl
     strcpy(msg->payload, payload);
   }
 
+  strcpy(msg->topic, topic);
+
   msg->pub.buffer = msg->payload;
   msg->pub.total_len = len;
-  msg->pub.topic_name = topic;
-  msg->pub.topic_name_len = strlen(topic);
+  msg->pub.topic_name = msg->topic;
+  msg->pub.topic_name_len = strlen(msg->topic);
   msg->pub.packet_id = ++context->packet_id;
   msg->pub.duplicate = 0;
   msg->pub.retain = 0;
@@ -649,7 +625,11 @@ void mqtt_poll(struct mqtt_context *context) {
     context->topics[0].topic_filter = MQTT_TOPIC_ALL_SET;
     context->topics[1].topic_filter = MQTT_TOPIC_CH_BR_SET(1);
     context->topics[2].topic_filter = MQTT_TOPIC_CH_BR_SET(2);
-    context->topics[3].topic_filter = MQTT_TOPIC_GRP_RGB_SET(1);
+    context->topics[3].topic_filter = MQTT_TOPIC_CH_BR_SET(3);
+    context->topics[4].topic_filter = MQTT_TOPIC_CH_BR_SET(4);
+    context->topics[5].topic_filter = MQTT_TOPIC_CH_BR_SET(5);
+    context->topics[6].topic_filter = MQTT_TOPIC_CH_BR_SET(6);
+    context->topics[7].topic_filter = MQTT_TOPIC_GRP_RGB_SET(1);
 
     memset(&context->sub, 0, sizeof(MqttSubscribe));
     context->sub.topics = context->topics;

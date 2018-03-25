@@ -24,6 +24,7 @@ SOURCES := src/main.c \
            src/led.c \
            src/wifi.c \
            src/mqtt.c \
+           src/mqtt_device.c \
            src/debug.c
 #           src/fast_hsv2rgb_8bit.c
 
