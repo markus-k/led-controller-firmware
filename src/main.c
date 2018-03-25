@@ -64,26 +64,6 @@ void hard_fault_handler() {
   debug_fault();
 }
 
-
-void demo_fading() {
-  static uint8_t pre = 0;
-  static uint8_t dir = 0;
-
-  pre++;
-  if (pre > 50) {
-    if (dir == 0) {
-      led_channels[3].value++;
-    } else {
-      led_channels[3].value--;
-    }
-
-    if (led_channels[3].value == 0 || led_channels[3].value == 0xFF) {
-      dir = !dir;
-    }
-    pre = 0;
-  }
-}
-
 const static struct state_transition state_transition_table[] = {
   { STATE_INIT,            STATE_WIFI_CONNECTING, EVENT_WIFI_CONNECTING },
   { STATE_WIFI_CONNECTING, STATE_WIFI_CONNECTED,  EVENT_WIFI_CONNECTED },
@@ -160,8 +140,6 @@ int main() {
     mqtt_poll(&mqtt_ctx);
 
     handle_states();
-
-    demo_fading();
 
     __asm__ volatile("wfi");
   }
