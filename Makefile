@@ -164,7 +164,7 @@ all: $(BUILD_DIR) $(PROJECT_NAME).elf
 	$(CC) $(CFLAGS) -c $< -o $@
 
 src/gamma-lut.c: src/gamma-lut-gen
-	./src/gamma-lut-gen 2.0 13 8 gamma_lut > $@
+	./src/gamma-lut-gen 2.0 10 8 gamma_lut > $@
 
 src/gamma-lut-gen: src/gamma-lut-gen.c
 	$(HOSTCC) $< -lm -o $@

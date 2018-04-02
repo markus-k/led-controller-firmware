@@ -37,7 +37,8 @@ static void setup_pwm(uint32_t timer_periph) {
   timer_set_oc_mode(timer_periph, TIM_OC4, pwm_mode);
   timer_set_prescaler(timer_periph, 0);
   //timer_set_period(timer_periph, 65535);
-  timer_set_period(timer_periph, 8191); // 13 bit
+  //timer_set_period(timer_periph, 8191); // 13 bit
+  timer_set_period(timer_periph, 1023); // 10 bit
 
   timer_enable_oc_output(timer_periph, TIM_OC1);
   timer_enable_oc_output(timer_periph, TIM_OC2);
