@@ -146,7 +146,7 @@ sint8 nm_bus_init(void *pvinit) {
 
   spi_reset(SPI1);
   spi_init_master(SPI1,
-		  SPI_CR1_BAUDRATE_FPCLK_DIV_64,
+		  SPI_CR1_BAUDRATE_FPCLK_DIV_2,
 		  SPI_CR1_CPOL_CLK_TO_0_WHEN_IDLE,
 		  SPI_CR1_CPHA_CLK_TRANSITION_1,
 		  SPI_CR1_DFF_8BIT,
