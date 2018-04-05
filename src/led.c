@@ -23,6 +23,7 @@
 #include "gamma-lut.h"
 
 volatile struct led_channel led_channels[LED_CHANNEL_NUM];
+volatile struct led_group led_groups[LED_GROUP_NUM];
 static volatile uint8_t all_ch_override = 1;
 
 static void setup_pwm(uint32_t timer_periph) {
@@ -50,9 +51,16 @@ static void setup_pwm(uint32_t timer_periph) {
 }
 
 void led_init() {
-  for (int i = 0; i < LED_CHANNEL_NUM; i++) {
+  int i;
+
+  for (i = 0; i < LED_GROUP_NUM; i++) {
+    led_groups[i].brightness = 255;
+  }
+
+  for (i = 0; i < LED_CHANNEL_NUM; i++) {
     led_channels[i].value = 128;
     led_channels[i].mode = LED_CHANNEL_MODE_OFF;
+    led_channels[i].group = &led_groups[i / (LED_CHANNEL_NUM / LED_GROUP_NUM)];
     led_channels[i].pwm_reg = 0;
   }
 
@@ -89,11 +97,20 @@ void led_set_all_ch_override(uint8_t val) {
   all_ch_override = val;
 }
 
-void led_ch_update(struct led_channel *ch) {
+void led_ch_update(volatile struct led_channel *ch) {
+  uint16_t value = ch->value;
+
+  // group brightness
+  value = (uint16_t)value * (uint16_t)ch->group->brightness;
+  value = (value + 1 + (value >> 8)) >> 8; // /255
+
+  // gamma correction
+  value = gamma_lut[value];
+
   if (all_ch_override == 0) {
     *ch->pwm_reg = 0;
   } else {
-    *ch->pwm_reg = gamma_lut[ch->value];
+    *ch->pwm_reg = value;
   }
 }
 

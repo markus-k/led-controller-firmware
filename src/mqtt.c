@@ -392,10 +392,6 @@ void mqtt_socket_handler(SOCKET sock, uint8_t msg_type, void *msg) {
 
 /* ---------- mqtt functions ---------- */
 
-static int compare_topic(MqttMessage *msg, const char *topic) {
-  return memcmp(msg->topic_name, topic, msg->topic_name_len) == 0;
-}
-
 static void msg2str(MqttMessage *msg, char *str) {
   memcpy(str, msg->buffer, msg->buffer_len);
   str[msg->buffer_len] = 0; // null-terminate string
@@ -565,7 +561,7 @@ void mqtt_publish(struct mqtt_context *context, const char *topic, uint8_t *payl
   msg->pub.topic_name_len = strlen(msg->topic);
   msg->pub.packet_id = ++context->packet_id;
   msg->pub.duplicate = 0;
-  msg->pub.retain = 0;
+  msg->pub.retain = 1;
 }
 
 void mqtt_poll(struct mqtt_context *context) {
@@ -622,14 +618,8 @@ void mqtt_poll(struct mqtt_context *context) {
 
   case MQTT_CONN_STATE_CONNECTED:
     memset(context->topics, 0, sizeof(context->topics));
-    context->topics[0].topic_filter = MQTT_TOPIC_ALL_SET;
-    context->topics[1].topic_filter = MQTT_TOPIC_CH_BR_SET(1);
-    context->topics[2].topic_filter = MQTT_TOPIC_CH_BR_SET(2);
-    context->topics[3].topic_filter = MQTT_TOPIC_CH_BR_SET(3);
-    context->topics[4].topic_filter = MQTT_TOPIC_CH_BR_SET(4);
-    context->topics[5].topic_filter = MQTT_TOPIC_CH_BR_SET(5);
-    context->topics[6].topic_filter = MQTT_TOPIC_CH_BR_SET(6);
-    context->topics[7].topic_filter = MQTT_TOPIC_GRP_RGB_SET(1);
+
+    context->topics[0].topic_filter = MQTT_TOPIC_WILDCARD;
 
     memset(&context->sub, 0, sizeof(MqttSubscribe));
     context->sub.topics = context->topics;
@@ -651,6 +641,8 @@ void mqtt_poll(struct mqtt_context *context) {
     } else {
       const char *code_str = MqttClient_ReturnCodeToString(ret);
       DBG("mqtt: subscribe failed: %s (%d)", code_str, ret);
+
+      context->conn_state = MQTT_CONN_STATE_FAILED;
     }
     break;
 

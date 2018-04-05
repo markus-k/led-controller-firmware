@@ -22,7 +22,8 @@
 #include "mqtt.h"
 #include "mqtt_device.h"
 
-/* ---------- message parsing ---------- */
+
+/* ---------- message parsing and composing ---------- */
 
 static int parse_topic(const char *topic, const char *tmpl, uint32_t *val) {
   const char *offset = strchr(tmpl, '%');
@@ -87,15 +88,44 @@ static void print_topic(const char *tmpl, char *buf, int val) {
   }
 }
 
+static int parse_binary_message(const char *msg, uint8_t *out) {
+  *out = msg[0] != '0';
+
+  return 1;
+}
+
+static uint8_t parse_uint8_message(const char *msg, uint8_t *out) {
+  uint32_t val = strtoul(msg, NULL, 10);
+
+  if (val < 256) {
+    *out = val;
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
 void mqtt_dev_parse_message(struct mqtt_context *context, const char *topic, const char *msg) {
   uint32_t placeholder;
 
   if (parse_topic(topic, MQTT_TOPIC_ALL_SET, NULL)) {
-    uint8_t val = msg[0] != '0';
-    mqtt_dev_all_set(context, val);
+    uint8_t val;
+
+    if (parse_binary_message(msg, &val)) {
+      mqtt_dev_all_set(context, val);
+    }
   } else if (parse_topic(topic, MQTT_TOPIC_CH_BR_SET_TMPL, &placeholder)) {
-    uint8_t val = strtoul(msg, NULL, 10);
-    mqtt_dev_ch_set_br(context, placeholder, val);
+    uint8_t val;
+
+    if (parse_uint8_message(msg, &val)) {
+      mqtt_dev_ch_set_br(context, placeholder, val);
+    }
+  } else if (parse_topic(topic, MQTT_TOPIC_CH_SW_SET_TMPL, &placeholder)) {
+    uint8_t val;
+
+    if (parse_binary_message(msg, &val)) {
+      mqtt_dev_ch_set_sw(context, placeholder, val);
+    }
   } else if (parse_topic(topic, MQTT_TOPIC_GRP_RGB_SET_TMPL, &placeholder)) {
     uint8_t r, g, b;
     char *end = (char *)msg;
@@ -103,6 +133,12 @@ void mqtt_dev_parse_message(struct mqtt_context *context, const char *topic, con
     g = strtoul(end, &end, 10); end++;
     b = strtoul(end, &end, 10);
     mqtt_dev_grp_set_rgb(context, placeholder, r, g, b);
+  } else if (parse_topic(topic, MQTT_TOPIC_GRP_BR_SET_TMPL, &placeholder)) {
+    uint8_t val;
+
+    if (parse_uint8_message(msg, &val)) {
+      mqtt_dev_grp_set_br(context, placeholder, val);
+    }
   }
 }
 
@@ -128,6 +164,16 @@ void mqtt_dev_ch_set_br(struct mqtt_context *context, int ch, uint8_t val) {
   mqtt_publish(context, topic, buf);
 }
 
+void mqtt_dev_ch_set_sw(struct mqtt_context *context, int ch, uint8_t val) {
+  char buf[2] = { (val > 0 ? '1' : '0'), 0 };
+  char topic[MQTT_MAX_TOPIC_LEN];
+
+  led_channels[ch - 1].mode = (val > 0) ? LED_CHANNEL_MODE_ON : LED_CHANNEL_MODE_OFF;
+
+  print_topic(MQTT_TOPIC_CH_SW_GET_TMPL, topic, ch);
+  mqtt_publish(context, topic, buf);
+}
+
 void mqtt_dev_grp_set_rgb(struct mqtt_context *context, int grp, uint8_t r, uint8_t g, uint8_t b) {
   char buf[12];
   char topic[MQTT_MAX_TOPIC_LEN];
@@ -144,5 +190,29 @@ void mqtt_dev_grp_set_rgb(struct mqtt_context *context, int grp, uint8_t r, uint
   buf[s++] = ',';
   ultostr(buf + s, b);
   print_topic(MQTT_TOPIC_GRP_RGB_GET_TMPL, topic, grp);
+  mqtt_publish(context, topic, buf);
+}
+
+void mqtt_dev_grp_set_sw(struct mqtt_context *context, int grp, uint8_t val) {
+  char buf[2] = { (val > 0 ? '1' : '0'), 0 };
+  char topic[MQTT_MAX_TOPIC_LEN];
+  int ch_offset = (grp - 1) * 3;
+
+  mqtt_dev_ch_set_sw(context, ch_offset + 1, val);
+  mqtt_dev_ch_set_sw(context, ch_offset + 1, val);
+  mqtt_dev_ch_set_sw(context, ch_offset + 1, val);
+
+  print_topic(MQTT_TOPIC_GRP_SW_GET_TMPL, topic, grp);
+  mqtt_publish(context, topic, buf);
+}
+
+void mqtt_dev_grp_set_br(struct mqtt_context *context, int grp, uint8_t val) {
+  char buf[4];
+  char topic[MQTT_MAX_TOPIC_LEN];
+
+  led_groups[grp - 1].brightness = val;
+
+  ultostr(buf, val);
+  print_topic(MQTT_TOPIC_GRP_BR_GET_TMPL, topic, grp);
   mqtt_publish(context, topic, buf);
 }

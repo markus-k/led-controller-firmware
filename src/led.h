@@ -20,22 +20,32 @@
 
 #include <stdint.h>
 
-#define LED_CHANNEL_MODE_OFF            0
-#define LED_CHANNEL_MODE_ON             1
+typedef enum {
+  LED_CHANNEL_MODE_OFF = 0,
+  LED_CHANNEL_MODE_ON
+} led_channel_mode_t;
+
+struct led_group {
+  uint8_t brightness;
+};
 
 struct led_channel {
   uint8_t value;
-  uint8_t mode;
+  led_channel_mode_t mode;
+  volatile struct led_group *group;
+
   volatile uint16_t *pwm_reg;
 };
 
 #define LED_CHANNEL_NUM                 12
+#define LED_GROUP_NUM                   4
 
 extern volatile struct led_channel led_channels[];
+extern volatile struct led_group led_groups[];
 
 void led_init();
 void led_set_all_ch_override(uint8_t val);
-void led_ch_update(struct led_channel *ch);
+void led_ch_update(volatile struct led_channel *ch);
 void led_update_all_channels();
 
 #endif
