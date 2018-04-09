@@ -42,6 +42,14 @@
 #define BOARD_WINC_WAKE_PIN         GPIO15
 #define BOARD_WINC_PORT             GPIOB
 
+// eeprom GPIOs
+#define BOARD_I2C                   I2C2
+#define BOARD_I2C_PORT              GPIOB
+#define BOARD_I2C_SCL_PIN           GPIO10
+#define BOARD_I2C_SDA_PIN           GPIO11
+
+#define BOARD_EEPROM_I2C            BOARD_I2C
+
 typedef void (*board_exti_func_t)();
 
 typedef enum {

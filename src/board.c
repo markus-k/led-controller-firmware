@@ -21,6 +21,7 @@
 #include <libopencm3/stm32/exti.h>
 #include <libopencm3/stm32/flash.h>
 #include <libopencm3/stm32/gpio.h>
+#include <libopencm3/stm32/i2c.h>
 #include <libopencm3/stm32/rcc.h>
 
 #include "board.h"
@@ -104,6 +105,7 @@ static void enable_periph_clocks() {
   rcc_periph_clock_enable(RCC_GPIOB);
   rcc_periph_clock_enable(RCC_GPIOC);
   rcc_periph_clock_enable(RCC_AFIO);
+  rcc_periph_clock_enable(RCC_I2C2);
 }
 
 /**
@@ -182,6 +184,32 @@ void exti15_10_isr() {
   }
 }
 
+static void setup_i2c() {
+  gpio_set_mode(BOARD_I2C_PORT,
+		GPIO_MODE_OUTPUT_50_MHZ,
+		GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN,
+		BOARD_I2C_SDA_PIN | BOARD_I2C_SCL_PIN);
+
+  i2c_reset(BOARD_I2C);
+  i2c_peripheral_disable(BOARD_I2C);
+  i2c_set_clock_frequency(BOARD_I2C, I2C_CR2_FREQ_36MHZ);
+  i2c_set_fast_mode(BOARD_I2C);
+  /*
+   * fclock for I2C is 36MHz APB2 -> cycle time 28ns, low time at 400kHz
+   * incl trise -> Thigh = 1600ns; CCR = tlow/tcycle = 0x1C,9;
+   * Datasheet suggests 0x1e.
+   */
+  i2c_set_ccr(I2C2, 0x1e);
+
+  /*
+   * fclock for I2C is 36MHz -> cycle time 28ns, rise time for
+   * 400kHz => 300ns and 100kHz => 1000ns; 300ns/28ns = 10;
+   * Incremented by 1 -> 11.
+   */
+  i2c_set_trise(I2C2, 0x0b);
+  i2c_peripheral_enable(BOARD_I2C);
+}
+
 void board_register_winc_irq(board_exti_func_t func) {
   winc_exti_func = func;
 }
@@ -245,6 +273,7 @@ void board_init() {
   enable_periph_clocks();
   setup_gpio();
   setup_exti();
+  setup_i2c();
 
   // enable debugging during sleep
   DBGMCU_CR |= DBGMCU_CR_SLEEP;

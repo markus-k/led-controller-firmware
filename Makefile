@@ -21,6 +21,7 @@ SOURCES := src/main.c \
            src/board.c \
            src/gamma-lut.c \
            src/clock.c \
+           src/eeprom.c \
            src/led.c \
            src/wifi.c \
            src/mqtt.c \

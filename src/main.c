@@ -35,6 +35,7 @@
 #include "led.h"
 #include "mqtt.h"
 #include "wifi.h"
+#include "eeprom.h"
 
 static void debug_fault() {
   DBG("SCB_CFSR:  0x%x", SCB_CFSR);
@@ -128,6 +129,9 @@ int main() {
   DBG("Hello World.");
 
   clock_init();
+
+  eeprom_init();
+  eeprom_read_config(&global_config);
 
   led_init();
 
