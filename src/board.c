@@ -106,6 +106,7 @@ static void enable_periph_clocks() {
   rcc_periph_clock_enable(RCC_GPIOC);
   rcc_periph_clock_enable(RCC_AFIO);
   rcc_periph_clock_enable(RCC_I2C2);
+  rcc_periph_clock_enable(RCC_CRC);
 }
 
 /**

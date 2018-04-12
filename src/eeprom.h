@@ -26,32 +26,41 @@
 struct eeprom_ch_config {
   uint8_t value;
   uint8_t mode;
+
+  // fill 6 bytes for 8 total
+  uint8_t reserved1[6];
 };
 
 struct eeprom_grp_config {
   uint8_t brightness;
+
+  // fill 7 bytes for 8 total
+  uint8_t reserved1[7];
 };
 
 struct eeprom_config {
-  uint32_t chksum;
-
-  char wifi_ssid[64];
-  char wifi_psk[64];
-
-  char mqtt_hostname[32];
-  uint16_t mqtt_port;
-  char mqtt_username[32];
-  char mqtt_password[32];
+  uint8_t reserved1[12];
 
   struct eeprom_ch_config channels[12];
   struct eeprom_grp_config groups[4];
+
+  char wifi_ssid[64];
+  char wifi_psk[64];
+  // reserved for other wifi stuff
+  uint8_t reserved2[16];
+
+  char mqtt_hostname[32];
+  uint16_t mqtt_port;
+  uint8_t reserved3[14];
+  char mqtt_username[32];
+  char mqtt_password[32];
 };
 
 extern volatile struct eeprom_config global_config;
 
 void eeprom_init();
-void eeprom_read_page(uint8_t block, uint8_t address, uint8_t *data);
-void eeprom_write_page(uint8_t block, uint8_t address, uint8_t *data);
+void eeprom_read_page(uint8_t page, uint8_t *data);
+void eeprom_write_page(uint8_t page, uint8_t *data);
 void eeprom_read_config(struct eeprom_config *config);
 void eeprom_write_config(struct eeprom_config *config);
 
