@@ -145,7 +145,8 @@ endif
 
 LDFLAGS += -L $(TOOLCHAIN_LIBDIR)/thumb/v7-m/ --specs=nano.specs
 
-DBGFLAGS := -g -O0 -DDEBUG=1
+# -g3 also includes macros, which are helpful for debugging registers
+DBGFLAGS := -g3 -O0 -DDEBUG=1
 
 ifeq ($(DEBUG),1)
 CFLAGS += $(DBGFLAGS)
