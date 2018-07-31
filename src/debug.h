@@ -21,6 +21,8 @@
 #include <stdint.h>
 #include "clock.h"
 
+#define DEBUG_BAUDRATE 460800
+
 void debug_init();
 void debug_putc(char c);
 void debug_puts(char *s);
