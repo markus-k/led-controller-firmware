@@ -19,6 +19,8 @@
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/timer.h>
 
+#include "debug.h"
+#include "eeprom.h"
 #include "led.h"
 #include "gamma-lut.h"
 
@@ -50,6 +52,32 @@ static void setup_pwm(uint32_t timer_periph) {
   timer_enable_counter(timer_periph);
 }
 
+void led_load_config(struct eeprom_config *config) {
+  int i;
+
+  for (i = 0; i < LED_CHANNEL_NUM; i++) {
+    led_channels[i].value = config->channels[i].value;
+    led_channels[i].mode = config->channels[i].mode;
+  }
+
+  for (i = 0; i < LED_GROUP_NUM; i++) {
+    led_groups[i].brightness = config->groups[i].brightness;
+  }
+}
+
+void led_store_config(struct eeprom_config *config) {
+  int i;
+
+  for (i = 0; i < LED_CHANNEL_NUM; i++) {
+    config->channels[i].value = led_channels[i].value;
+    config->channels[i].mode = led_channels[i].mode;
+  }
+
+  for (i = 0; i < LED_GROUP_NUM; i++) {
+    config->groups[i].brightness = led_groups[i].brightness;
+  }
+}
+
 void led_init() {
   int i;
 
@@ -58,7 +86,7 @@ void led_init() {
   }
 
   for (i = 0; i < LED_CHANNEL_NUM; i++) {
-    led_channels[i].value = 128;
+    led_channels[i].value = 1;
     led_channels[i].mode = LED_CHANNEL_MODE_OFF;
     led_channels[i].group = &led_groups[i / (LED_CHANNEL_NUM / LED_GROUP_NUM)];
     led_channels[i].pwm_reg = 0;
@@ -93,6 +121,18 @@ void led_init() {
   led_channels[11].pwm_reg = (volatile uint16_t *)&TIM_CCR4(TIM4);
 }
 
+void led_ch_set_brightness(int ch, uint8_t value) {
+  led_channels[ch].value = value;
+}
+
+void led_ch_set_mode(int ch, uint8_t mode) {
+  led_channels[ch].mode = mode;
+}
+
+void led_grp_set_brightness(int grp, uint8_t value) {
+  led_groups[grp].brightness = value;
+}
+
 void led_set_all_ch_override(uint8_t val) {
   all_ch_override = val;
 }
@@ -107,7 +147,7 @@ void led_ch_update(volatile struct led_channel *ch) {
   // gamma correction
   value = gamma_lut[value];
 
-  if (all_ch_override == 0) {
+  if (all_ch_override == 0 || ch->mode == LED_CHANNEL_MODE_OFF) {
     *ch->pwm_reg = 0;
   } else {
     *ch->pwm_reg = value;
@@ -117,5 +157,15 @@ void led_ch_update(volatile struct led_channel *ch) {
 void led_update_all_channels() {
   for (int i = 0; i < LED_CHANNEL_NUM; i++) {
     led_ch_update(&led_channels[i]);
+  }
+}
+
+void led_debug_status() {
+  for (int i = 0; i < LED_CHANNEL_NUM; i++) {
+    DBG("led_channels[%d] = { .value = %d, .mode = %d }", i, led_channels[i].value, led_channels[i].mode);
+  }
+
+  for (int i = 0; i < LED_GROUP_NUM; i++) {
+    DBG("led_groups[%d] = { .brightness = %d }", i, led_groups[i].brightness);
   }
 }

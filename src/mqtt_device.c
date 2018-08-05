@@ -19,6 +19,7 @@
 #include <stdlib.h>
 
 #include "led.h"
+#include "eeprom.h"
 #include "mqtt.h"
 #include "mqtt_device.h"
 
@@ -139,10 +140,21 @@ void mqtt_dev_parse_message(struct mqtt_context *context, const char *topic, con
     if (parse_uint8_message(msg, &val)) {
       mqtt_dev_grp_set_br(context, placeholder, val);
     }
+  } else if (parse_topic(topic, MQTT_TOPIC_GRP_SW_SET_TMPL, &placeholder)) {
+    uint8_t val;
+
+    if (parse_binary_message(msg, &val)) {
+      mqtt_dev_grp_set_sw(context, placeholder, val);
+    }
   }
 }
 
 /* ---------- mqtt device functions ---------- */
+
+static void post_led_update() {
+  led_store_config(&global_config);
+  eeprom_delayed_write();
+}
 
 void mqtt_dev_all_set(struct mqtt_context *context, uint8_t val) {
   char buf[4];
@@ -151,27 +163,33 @@ void mqtt_dev_all_set(struct mqtt_context *context, uint8_t val) {
 
   ultostr(buf, val);
   mqtt_publish(context, MQTT_TOPIC_ALL_GET, buf);
+
+  post_led_update();
 }
 
 void mqtt_dev_ch_set_br(struct mqtt_context *context, int ch, uint8_t val) {
   char buf[4];
   char topic[MQTT_MAX_TOPIC_LEN];
 
-  led_channels[ch - 1].value = val;
+  led_ch_set_brightness(ch - 1, val);
 
   ultostr(buf, val);
   print_topic(MQTT_TOPIC_CH_BR_GET_TMPL, topic, ch);
   mqtt_publish(context, topic, buf);
+
+  post_led_update();
 }
 
 void mqtt_dev_ch_set_sw(struct mqtt_context *context, int ch, uint8_t val) {
   char buf[2] = { (val > 0 ? '1' : '0'), 0 };
   char topic[MQTT_MAX_TOPIC_LEN];
 
-  led_channels[ch - 1].mode = (val > 0) ? LED_CHANNEL_MODE_ON : LED_CHANNEL_MODE_OFF;
+  led_ch_set_mode(ch - 1, (val > 0) ? LED_CHANNEL_MODE_ON : LED_CHANNEL_MODE_OFF);
 
   print_topic(MQTT_TOPIC_CH_SW_GET_TMPL, topic, ch);
   mqtt_publish(context, topic, buf);
+
+  post_led_update();
 }
 
 void mqtt_dev_grp_set_rgb(struct mqtt_context *context, int grp, uint8_t r, uint8_t g, uint8_t b) {
@@ -191,6 +209,8 @@ void mqtt_dev_grp_set_rgb(struct mqtt_context *context, int grp, uint8_t r, uint
   ultostr(buf + s, b);
   print_topic(MQTT_TOPIC_GRP_RGB_GET_TMPL, topic, grp);
   mqtt_publish(context, topic, buf);
+
+  post_led_update();
 }
 
 void mqtt_dev_grp_set_sw(struct mqtt_context *context, int grp, uint8_t val) {
@@ -199,20 +219,24 @@ void mqtt_dev_grp_set_sw(struct mqtt_context *context, int grp, uint8_t val) {
   int ch_offset = (grp - 1) * 3;
 
   mqtt_dev_ch_set_sw(context, ch_offset + 1, val);
-  mqtt_dev_ch_set_sw(context, ch_offset + 1, val);
-  mqtt_dev_ch_set_sw(context, ch_offset + 1, val);
+  mqtt_dev_ch_set_sw(context, ch_offset + 2, val);
+  mqtt_dev_ch_set_sw(context, ch_offset + 3, val);
 
   print_topic(MQTT_TOPIC_GRP_SW_GET_TMPL, topic, grp);
   mqtt_publish(context, topic, buf);
+
+  post_led_update();
 }
 
 void mqtt_dev_grp_set_br(struct mqtt_context *context, int grp, uint8_t val) {
   char buf[4];
   char topic[MQTT_MAX_TOPIC_LEN];
 
-  led_groups[grp - 1].brightness = val;
+  led_grp_set_brightness(grp - 1, val);
 
   ultostr(buf, val);
   print_topic(MQTT_TOPIC_GRP_BR_GET_TMPL, topic, grp);
   mqtt_publish(context, topic, buf);
+
+  post_led_update();
 }

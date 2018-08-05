@@ -28,6 +28,7 @@
 #include <libopencm3/stm32/spi.h>
 #include <libopencm3/stm32/timer.h>
 
+#include "config.h"
 #include "board.h"
 #include "clock.h"
 #include "debug.h"
@@ -131,9 +132,19 @@ int main() {
   clock_init();
 
   eeprom_init();
+  memset(&global_config, 0, sizeof(struct eeprom_config));
+  strcpy(global_config.wifi_ssid, WIFI_SSID);
+  strcpy(global_config.wifi_psk, WIFI_PSK);
+  strcpy(global_config.mqtt_hostname, "1.2.3.4");
+  global_config.mqtt_port = 1883;
+  strcpy(global_config.mqtt_username, "");
+  strcpy(global_config.mqtt_password, "");
+  //eeprom_write_config(&global_config);
+
   eeprom_read_config(&global_config);
 
   led_init();
+  led_load_config(&global_config);
 
   wifi_init();
 
@@ -142,6 +153,7 @@ int main() {
   while (1) {
     wifi_poll();
     mqtt_poll(&mqtt_ctx);
+    eeprom_poll();
 
     handle_states();
 

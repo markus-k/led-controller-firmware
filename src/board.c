@@ -26,6 +26,8 @@
 
 #include "board.h"
 
+#include "led.h"
+
 static volatile board_exti_func_t winc_exti_func = 0;
 static volatile board_blinkrate_t blinkrates[BOARD_LED_NUM] = {
   BOARD_BLINKRATE_SLOW,
@@ -168,6 +170,7 @@ void exti15_10_isr() {
   if (exti_get_flag_status(BOARD_BTN_ONBOARD_EXTI)) {
     exti_reset_request(BOARD_BTN_ONBOARD_EXTI);
 
+    led_debug_status();
     // todo
   }
 

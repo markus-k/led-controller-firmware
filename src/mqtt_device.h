@@ -27,10 +27,10 @@
  * subscribed topics:
  * - <base>/all/set: turn all channels on/off, values 0 or 1
  * - <base>/ch/[1-12]/brightness/set: channel brightness, values 0 to 255
- * - <base>/ch/[1-12]/switch/set: channel brightness
+ * - <base>/ch/[1-12]/switch/set: channel switch
  * - <base>/grp/[1-4]/rgb/set: rgb color, three 0-255 values, comma separated
  * - <base>/grp/[1-4]/brightness/set: additional dimming factor for group: 0-255
- * - <base>/grp/[1-4]/switch/set: group brightness
+ * - <base>/grp/[1-4]/switch/set: group switch
  *
  * published topics:
  * - <base>/all/get: current status, 0 or 1

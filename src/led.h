@@ -40,12 +40,24 @@ struct led_channel {
 #define LED_CHANNEL_NUM                 12
 #define LED_GROUP_NUM                   4
 
-extern volatile struct led_channel led_channels[];
-extern volatile struct led_group led_groups[];
+//extern volatile struct led_channel led_channels[];
+//extern volatile struct led_group led_groups[];
+
+#include "eeprom.h"
 
 void led_init();
+
+void led_load_config(struct eeprom_config *config);
+void led_store_config(struct eeprom_config *config);
+
+void led_ch_set_brightness(int ch, uint8_t value);
+void led_ch_set_mode(int ch, uint8_t mode);
+void led_grp_set_brightness(int grp, uint8_t value);
 void led_set_all_ch_override(uint8_t val);
+
 void led_ch_update(volatile struct led_channel *ch);
 void led_update_all_channels();
+
+void led_debug_status();
 
 #endif
