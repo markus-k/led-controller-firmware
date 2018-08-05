@@ -23,6 +23,9 @@
 #define EEPROM_I2C_ADDRESS(block)       (0b1010000 | ((block) & 0x7))
 #define EEPROM_PAGE_SIZE                16
 
+// delay after eeprom_delayed_write() in seconds
+#define EEPROM_WRITE_DELAY              10000
+
 struct eeprom_ch_config {
   uint8_t value;
   uint8_t mode;
@@ -56,12 +59,16 @@ struct eeprom_config {
   char mqtt_password[32];
 };
 
-extern volatile struct eeprom_config global_config;
+extern struct eeprom_config global_config;
 
 void eeprom_init();
 void eeprom_read_page(uint8_t page, uint8_t *data);
 void eeprom_write_page(uint8_t page, uint8_t *data);
 void eeprom_read_config(struct eeprom_config *config);
 void eeprom_write_config(struct eeprom_config *config);
+
+// functions for delayed writing
+void eeprom_poll();
+void eeprom_delayed_write();
 
 #endif

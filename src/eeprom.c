@@ -24,7 +24,9 @@
 #include "clock.h"
 #include "eeprom.h"
 
-volatile struct eeprom_config global_config;
+struct eeprom_config global_config;
+static uint64_t last_write_call = 0;
+static uint8_t delayed_write = 0;
 
 void eeprom_init() {
   // nothing
@@ -157,6 +159,8 @@ void eeprom_read_config(struct eeprom_config *config) {
     // CRC mismatch
     DBG("eeprom: CRC mismatch while reading, read: 0x%x, calculated: 0x%x", crc_stored, crc);
   }
+
+  DBG("eeprom: read successful");
 }
 
 void eeprom_write_config(struct eeprom_config *config) {
@@ -256,4 +260,18 @@ void eeprom_write_config(struct eeprom_config *config) {
   eeprom_write_page(0, buf);
 
   DBG("eeprom: written up to addr %u with crc 0x%x", page, crc);
+}
+
+void eeprom_poll() {
+  if (delayed_write && clock_ticks >= last_write_call + EEPROM_WRITE_DELAY) {
+    delayed_write = 0;
+
+    DBG("eeprom: running delayed write");
+    eeprom_write_config(&global_config);
+  }
+}
+
+void eeprom_delayed_write() {
+  last_write_call = clock_ticks;
+  delayed_write = 1;
 }
