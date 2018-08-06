@@ -23,7 +23,7 @@
 #include <winc1500/socket/include/socket.h>
 
 #define MQTT_TX_BUF_SIZE 256
-#define MQTT_RX_BUF_SIZE 1400
+#define MQTT_RX_BUF_SIZE 1460
 #define MQTT_RX_OVF_BUF_SIZE (MQTT_RX_BUF_SIZE)
 
 #define MQTT_MAX_TOPIC_LEN 64
