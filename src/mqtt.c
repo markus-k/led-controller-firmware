@@ -142,26 +142,31 @@ static int16_t recv_wrapper(struct mqtt_sock_context *sock_ctx, uint8_t *buf, ui
   int ret;
   int rc;
 
+  DBG("recv_wrapper: buf = %x, len = %d, timeout = %d, ovf_len = %d, ovf_pos = %d", buf, len, timeout, sock_ctx->rx_ovf_len, sock_ctx->rx_ovf_pos);
+
   if (ovf_len > 0) {
+    uint16_t read_len;
+
     if (ovf_len >= len) {
-      // all requested data is in buffer
-      memcpy(buf, sock_ctx->rx_ovf_buf + sock_ctx->rx_ovf_pos, len);
-      sock_ctx->rx_ovf_pos += len;
-
-      if (sock_ctx->rx_ovf_pos == sock_ctx->rx_ovf_len) {
-	// buffer is empty now
-	sock_ctx->rx_ovf_pos = 0;
-	sock_ctx->rx_ovf_len = 0;
-      }
-
-      rc = len;
+      read_len = len;
     } else {
-      // partial data is available
+      // if we don't have all requested data, return what we have
+      read_len = ovf_len;
 
-      // ??
-      DBG("recv_wrapper: partial recv TODO!");
-      rc = -1;
+      DBG("recv_wrapper: partial recv: ovf_len = %d, len = %d, buf_len = %d", ovf_len, len, sock_ctx->rx_ovf_len);
     }
+
+    // copy requested data to buffer
+    memcpy(buf, sock_ctx->rx_ovf_buf + sock_ctx->rx_ovf_pos, read_len);
+    sock_ctx->rx_ovf_pos += read_len;
+
+    if (sock_ctx->rx_ovf_pos == sock_ctx->rx_ovf_len) {
+      // buffer is empty now
+      sock_ctx->rx_ovf_pos = 0;
+      sock_ctx->rx_ovf_len = 0;
+    }
+
+    rc = read_len;
   } else {
     ret = recv(sock_ctx->sock, sock_ctx->rx_tmp_buf, len, timeout);
     if (ret != SOCK_ERR_NO_ERROR) {
@@ -323,7 +328,7 @@ static void handle_socket_recv(struct mqtt_sock_context *sock_ctx, tstrSocketRec
 #endif
 
     if (buf_len + sock_ctx->rx_ovf_len > MQTT_RX_OVF_BUF_SIZE) {
-      DBG("sock: ERROR: ovf buffer full, discarding data!");
+      DBG("sock: ERROR: ovf buffer full, discarding data! buf_len = %d, ovf_len = %d", buf_len, sock_ctx->rx_ovf_len);
       return;
     }
 
