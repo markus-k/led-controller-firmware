@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2017  Markus Kasten
+# Copyright (C) 2018  Markus Kasten
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -17,133 +17,73 @@
 
 PROJECT_NAME := led-controller
 
-SOURCES := src/main.c \
-           src/board.c \
-           src/gamma-lut.c \
-           src/clock.c \
-           src/eeprom.c \
-           src/led.c \
-           src/wifi.c \
-           src/mqtt.c \
-           src/mqtt_device.c \
-           src/debug.c
-#           src/fast_hsv2rgb_8bit.c
+########################################
 
-WINC1500_SOURCES := contrib/winc1500/common/source/nm_common.c \
-                    contrib/winc1500/driver/source/m2m_ate_mode.c \
-                    contrib/winc1500/driver/source/m2m_crypto.c \
-                    contrib/winc1500/driver/source/m2m_hif.c \
-                    contrib/winc1500/driver/source/m2m_ota.c \
-                    contrib/winc1500/driver/source/m2m_periph.c \
-                    contrib/winc1500/driver/source/m2m_ssl.c \
-                    contrib/winc1500/driver/source/m2m_wifi.c \
-                    contrib/winc1500/driver/source/nmasic.c \
-                    contrib/winc1500/driver/source/nmbus.c \
-                    contrib/winc1500/driver/source/nmdrv.c \
-                    contrib/winc1500/driver/source/nmspi.c \
-                    contrib/winc1500/socket/source/socket.c \
-                    contrib/winc1500/spi_flash/source/spi_flash.c \
-                    contrib/winc1500/bsp/source/nm_bsp_locm3.c \
-                    contrib/winc1500/bus_wrapper/source/nm_bus_wrapper_locm3.c
-
-#MQTT_SOURCES := contrib/paho-mqtt/MQTTClient-C/src/MQTTClient.c \
-#                contrib/paho-mqtt/MQTTPacket/src/MQTTPacket.c
-MQTT_SOURCES := contrib/wolfMQTT/src/mqtt_packet.c \
-                contrib/wolfMQTT/src/mqtt_client.c \
-                contrib/wolfMQTT/src/mqtt_socket.c
-
-SOURCES += $(WINC1500_SOURCES)
-SOURCES += $(MQTT_SOURCES)
-
-HARDFP = 0
-
-DEBUG = 1
-
-############################################################
+UNAME := $(shell uname)
+ifeq ($(UNAME),Linux)
+	PREFIX ?= /usr/bin/arm-none-eabi
+	LIBDIR ?= /usr/arm-none-eabi/lib
+endif
+ifeq ($(UNAME),Darwin)
+	PREFIX ?= /usr/local/gcc-arm-none-eabi-6-2017-q2-update/bin/arm-none-eabi
+	LIBDIR ?= /usr/local/gcc-arm-none-eabi-6-2017-q2-update/arm-none-eabi/lib
+endif
 
 OPENCM3_DIR ?= $(realpath libopencm3)
 
-UNAME := $(shell uname)
+HOSTCC ?= gcc
+OPENOCD ?= openocd
 
-ifeq ($(UNAME),Linux)
-	TOOLCHAIN_PREFIX ?= /usr/bin/arm-none-eabi
-	TOOLCHAIN_LIBDIR ?= /usr/arm-none-eabi/lib
-endif
-ifeq ($(UNAME),Darwin)
-	TOOLCHAIN_PREFIX ?= /usr/local/gcc-arm-none-eabi-6-2017-q2-update/bin/arm-none-eabi
-	TOOLCHAIN_LIBDIR ?= /usr/local/gcc-arm-none-eabi-6-2017-q2-update/arm-none-eabi/lib
-endif
+########################################
 
-CC      := $(TOOLCHAIN_PREFIX)-gcc
-LD      := $(TOOLCHAIN_PREFIX)-gcc
-OBJCOPY := $(TOOLCHAIN_PREFIX)-objcopy
-OBJDUMP := $(TOOLCHAIN_PREFIX)-objdump
-OBJSIZE := $(TOOLCHAIN_PREFIX)-size
-GDB     := $(TOOLCHAIN_PREFIX)-gdb
-MAKE    := make
-OPENOCD := openocd
+OBJS += src/main.o \
+	src/board.o \
+        src/gamma-lut.o \
+        src/clock.o \
+        src/eeprom.o \
+        src/led.o \
+        src/wifi.o \
+        src/mqtt.o \
+        src/mqtt_device.o \
+        src/debug.o
 
-HOSTCC  := gcc
+WINC1500_OBJS := contrib/winc1500/common/source/nm_common.o \
+                 contrib/winc1500/driver/source/m2m_ate_mode.o \
+                 contrib/winc1500/driver/source/m2m_crypto.o \
+                 contrib/winc1500/driver/source/m2m_hif.o \
+                 contrib/winc1500/driver/source/m2m_ota.o \
+                 contrib/winc1500/driver/source/m2m_periph.o \
+                 contrib/winc1500/driver/source/m2m_ssl.o \
+                 contrib/winc1500/driver/source/m2m_wifi.o \
+                 contrib/winc1500/driver/source/nmasic.o \
+                 contrib/winc1500/driver/source/nmbus.o \
+                 contrib/winc1500/driver/source/nmdrv.o \
+                 contrib/winc1500/driver/source/nmspi.o \
+                 contrib/winc1500/socket/source/socket.o \
+                 contrib/winc1500/spi_flash/source/spi_flash.o \
+                 contrib/winc1500/bsp/source/nm_bsp_locm3.o \
+                 contrib/winc1500/bus_wrapper/source/nm_bus_wrapper_locm3.o
 
-CPU      := cortex-m3
-PLATFORM := stm32f1
+MQTT_OBJS := contrib/wolfMQTT/src/mqtt_packet.o \
+             contrib/wolfMQTT/src/mqtt_client.o \
+             contrib/wolfMQTT/src/mqtt_socket.o
 
-#OPENCM3_TARGETS  := stm32/f3
-#OPENCM3_LDSCRIPT := stm32/f3/stm32f303xc.ld
-OPENCM3_TARGETS  := stm32/f1
-OPENCM3_LDSCRIPT := stm32/f1/stm32f100x8.ld
+OBJS += $(WINC1500_OBJS)
+OBJS += $(MQTT_OBJS)
 
-CM3MAKEFLAGS := PREFIX="$(TOOLCHAIN_PREFIX)"
+########################################
 
-#OPENOCD_FLAGS := -f board/stm32f3discovery.cfg
-OPENOCD_FLAGS := -f interface/stlink-v2.cfg -f target/stm32f1x.cfg
+DEVICE = stm32f101c8t6
+CFLAGS          += -std=c99 -Icontrib -Icontrib/winc1500 -Icontrib/wolfMQTT/ -Isrc  -DWOLFMQTT_NONBLOCK=1 -DHAVE_CONFIG_H=1
+CPPFLAGS	+= -MD
+LDFLAGS         += -static -nostartfiles -L $(LIBDIR)/thumb/v7-m/ --specs=nano.specs
+LDLIBS          += -Wl,--start-group -lc -lgcc -lnosys -Wl,--end-group
 
-ifeq ($(HARDFP),1)
-FP_FLAGS := -mfloat-abi=hard -mfpu=fpv4-sp-d16
-else
-FP_FLAGS := -mfloat-abi=soft
-endif
+# remove unused functions
+CFLAGS += -ffunction-sections -fdata-sections
+LDFLAGS += -Wl,--gc-sections
 
-WINC_CFLAGS := -Icontrib/winc1500
-#MQTT_CFLAGS := -Icontrib/paho-mqtt/MQTTClient-C/src \
-#               -Icontrib/paho-mqtt/MQTTPacket/src \
-#               -DMQTTCLIENT_PLATFORM_HEADER=mqtt.h
-MQTT_CFLAGS := -Icontrib/wolfMQTT/ -DWOLFMQTT_NONBLOCK=1 -DHAVE_CONFIG_H=1
-
-CFLAGS := -I$(OPENCM3_DIR)/include \
-          $(WINC_CFLAGS) \
-          $(MQTT_CFLAGS) \
-          -Icontrib \
-          -Isrc \
-          -std=c99 \
-          -mcpu=$(CPU) \
-          -mthumb \
-          $(FP_FLAGS) \
-          -mfix-cortex-m3-ldrd \
-          -fno-builtin \
-          -ffunction-sections \
-          -fdata-sections \
-          -fverbose-asm \
-          -fno-common \
-          -MD -D$(shell echo $(PLATFORM) | tr a-z A-Z)
-
-LDFLAGS := --static \
-           -nostartfiles \
-           -L$(OPENCM3_DIR)/lib \
-           -L$(dir $(OPENCM3_DIR)/lib/$(OPENCM3_LDSCRIPT)) \
-           -T$(OPENCM3_DIR)/lib/$(OPENCM3_LDSCRIPT) \
-           -lopencm3_$(PLATFORM) \
-           -Wl,--gc-sections \
-           -Wl,--Map=$(PROJECT_NAME).map \
-           -Wl,--start-group -lc -lgcc -lnosys -Wl,--end-group
-
-# use include path for hardfp with hardfloat
-ifeq ($(HARDFP),1)
-LDFLAGS += -L $(TOOLCHAIN_LIBDIR)/gcc/arm-none-eabi/6.3.1/hard/ \
-           -L $(TOOLCHAIN_LIBDIR)/hard/
-endif
-
-LDFLAGS += -L $(TOOLCHAIN_LIBDIR)/thumb/v7-m/ --specs=nano.specs
+DEBUG = 1
 
 # -g3 also includes macros, which are helpful for debugging registers
 DBGFLAGS := -g3 -O0 -DDEBUG=1
@@ -152,41 +92,29 @@ ifeq ($(DEBUG),1)
 CFLAGS += $(DBGFLAGS)
 endif
 
-OBJECTS := $(SOURCES:%.c=%.o)
+OPENOCD_FLAGS := -f interface/stlink-v2.cfg -f target/stm32f1x.cfg
 
-all: $(BUILD_DIR) $(PROJECT_NAME).elf
-	$(OBJSIZE) $(PROJECT_NAME).elf
+OPENCM3_FLAGS := PREFIX="$(PREFIX)"
 
-# C files
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+include $(OPENCM3_DIR)/mk/genlink-config.mk
+include $(OPENCM3_DIR)/mk/gcc-config.mk
 
-# Asm files
-%.o: %.s
-	$(CC) $(CFLAGS) -c $< -o $@
+########################################
+
+.PHONY: clean
+.SECONDARY: $(OBJS)
+
+all: $(PROJECT_NAME).elf $(PROJECT_NAME).hex
+	$(SIZE) $(PROJECT_NAME).elf
+
+locm3:
+	$(MAKE) $(OPENCM3_FLAGS) TARGETS="stm32/f1" -C $(OPENCM3_DIR)
 
 src/gamma-lut.c: src/gamma-lut-gen
 	./src/gamma-lut-gen 2.0 10 8 gamma_lut > $@
 
 src/gamma-lut-gen: src/gamma-lut-gen.c
 	$(HOSTCC) $< -lm -o $@
-
-sigmoid-lut.c: sigmoid-lut-gen
-	./sigmoid-lut-gen 2.0 8 8 > sigmoid-lut.c
-
-sigmoid-lut-gen: sigmoid-lut-gen.c
-	$(HOSTCC) $< -lm -o sigmoid-lut-gen
-
-# output files
-$(PROJECT_NAME).elf \
-$(PROJECT_NAME).hex \
-$(PROJECT_NAME).bin: $(OPENCM3_DIR)/lib/libopencm3_$(PLATFORM).a $(OBJECTS)
-	$(LD) $(OBJECTS) $(LDFLAGS) -o $(PROJECT_NAME).elf
-	$(OBJCOPY) -O ihex $(PROJECT_NAME).elf $(PROJECT_NAME).hex
-	$(OBJCOPY) -O binary $(PROJECT_NAME).elf $(PROJECT_NAME).bin
-
-$(OPENCM3_DIR)/lib/libopencm3_$(PLATFORM).a:
-	$(MAKE) $(CM3MAKEFLAGS) TARGETS="$(OPENCM3_TARGETS)" FP_FLAGS="$(FP_FLAGS)" -C $(OPENCM3_DIR)
 
 disasm: $(PROJECT_NAME).elf
 	$(OBJDUMP) -S -d $^
@@ -202,14 +130,16 @@ flash: $(PROJECT_NAME).elf
 		-c "reset halt" -c "flash write_image erase $(PROJECT_NAME).elf" \
 		-c "verify_image $(PROJECT_NAME).elf" -c "reset run" -c "shutdown"
 
-.PHONY: clean
-
 clean:
-	rm -rf $(OBJECTS) $(OBJECTS:.o=.d)
-	rm -f $(PROJECT_NAME).{elf,hex,bin}
+	rm -f $(OBJS) $(OBJS:.o=.d)
+	rm -f $(PROJECT_NAME).{elf,hex,bin,map}
+	rm -f generated.*.ld
 	rm -f src/gamma-lut-gen
 
 mrproper: clean
-	$(MAKE) $(CM3MAKEFLAGS) TARGETS="$(OPENCM3_TARGETS)" -C $(OPENCM3_DIR) clean
+	$(MAKE) -C $(OPENCM3_DIR) clean
 
--include $(OBJECTS:.o=.d)
+########################################
+
+include $(OPENCM3_DIR)/mk/genlink-rules.mk
+include $(OPENCM3_DIR)/mk/gcc-rules.mk
