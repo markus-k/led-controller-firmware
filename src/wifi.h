@@ -18,8 +18,14 @@
 #ifndef __WIFI_H
 #define __WIFI_H
 
+#include <stdint.h>
+
 void wifi_init();
 void wifi_connect();
 void wifi_poll();
+
+void wifi_req_rssi();
+uint8_t wifi_rssi_updated();
+int8_t wifi_get_rssi();
 
 #endif

@@ -34,6 +34,9 @@
 #include "mqtt.h"
 #include "states.h"
 
+static uint8_t rssi_updated = 0;
+static int8_t last_rssi = 0;
+
 static void socket_event_handler(SOCKET sock, uint8_t msg_type, void *msg) {
   //DBG("socket: message %u", msg_type);
 
@@ -81,6 +84,14 @@ static void wifi_cb(uint8 msg_type, void *msg) {
     signal_event(EVENT_WIFI_CONNECTED);
 
     //mqtt_init(0);
+    break;
+  case M2M_WIFI_RESP_CURRENT_RSSI:
+    {
+      int8_t *rssi = (int8_t *)msg;
+      last_rssi = *rssi;
+      rssi_updated = 1;
+      DBG("rssi: %d", last_rssi);
+    }
     break;
   case M2M_WIFI_RESP_SCAN_DONE:
     DBG("wifi: scan done");
@@ -158,4 +169,17 @@ void wifi_connect() {
 
 void wifi_poll() {
   m2m_wifi_handle_events(0);
+}
+
+void wifi_req_rssi() {
+  rssi_updated = 0;
+  m2m_wifi_req_curr_rssi();
+}
+
+uint8_t wifi_rssi_updated() {
+  return rssi_updated;
+}
+
+int8_t wifi_get_rssi() {
+  return last_rssi;
 }

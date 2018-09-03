@@ -35,6 +35,7 @@
 #include "states.h"
 #include "led.h"
 #include "mqtt.h"
+#include "mqtt_device.h"
 #include "wifi.h"
 #include "eeprom.h"
 
@@ -154,6 +155,7 @@ int main() {
     wifi_poll();
     mqtt_poll(&mqtt_ctx);
     eeprom_poll();
+    mqtt_dev_status_poll(&mqtt_ctx);
 
     handle_states();
 

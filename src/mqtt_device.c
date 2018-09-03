@@ -18,11 +18,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "clock.h"
 #include "led.h"
 #include "eeprom.h"
+#include "wifi.h"
 #include "mqtt.h"
 #include "mqtt_device.h"
-
 
 /* ---------- message parsing and composing ---------- */
 
@@ -58,6 +59,46 @@ static int ultostr(char *dst, unsigned int val) {
       val = val / 10;
       i++;
     }
+  }
+
+  ret = i;
+
+  while (i--) {
+    *dst++ = buf[i];
+  }
+
+  // null-terminate
+  *dst = 0;
+
+  return ret;
+}
+
+static int ltostr(char *dst, int val) {
+  const char *chars = "0123456789";
+  int i = 0;
+  int neg;
+  int ret;
+  char buf[8];
+
+  if (val == 0) {
+    buf[0] = chars[0];
+    i++;
+  } else {
+    if (val < 0) {
+      val = ~val + 1;
+      neg = 1;
+    }
+
+    while (val) {
+      uint32_t rem = val % 10;
+      buf[i] = chars[rem];
+      val = val / 10;
+      i++;
+    }
+  }
+
+  if (neg) {
+    buf[i++] = '-';
   }
 
   ret = i;
@@ -239,4 +280,32 @@ void mqtt_dev_grp_set_br(struct mqtt_context *context, int grp, uint8_t val) {
   mqtt_publish(context, topic, buf);
 
   post_led_update();
+}
+
+void mqtt_dev_status_report_wifi_rssi(struct mqtt_context *context, int8_t val) {
+  char buf[5];
+
+  ltostr(buf, val);
+  mqtt_publish(context, MQTT_TOPIC_STATUS_WIFI_RSSI, buf);
+}
+
+#define RSSI_UPDATE_INTERVAL 10000
+static uint64_t last_rssi_update = 0;
+static uint8_t rssi_update_requested = 0;
+
+void mqtt_dev_status_poll(struct mqtt_context *context) {
+  if (clock_ticks > last_rssi_update + RSSI_UPDATE_INTERVAL) {
+    if (!rssi_update_requested) {
+      wifi_req_rssi();
+      rssi_update_requested = 1;
+    }
+
+    if (wifi_rssi_updated()) {
+      int8_t rssi = wifi_get_rssi();
+
+      mqtt_dev_status_report_wifi_rssi(context, rssi);
+      last_rssi_update = clock_ticks;
+      rssi_update_requested = 0;
+    }
+  }
 }

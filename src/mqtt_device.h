@@ -37,6 +37,7 @@
  * - <base>/ch/[1-12]/brightness/get: channel brightness, values 0 to 255
  * - <base>/grp/[1-4]/rgb/get: rgb color, three 0-255 values, comma separated
  * - <base>/grp/[1-4]/brightness/get: additional dimming factor for group: 0-255
+ * - <base>/device/wifi/rssi: WiFi RSSI, updated regularly
  */
 
 #define MQTT_TOPIC_PREFIX               "led-controller/"
@@ -56,6 +57,8 @@
 #define MQTT_TOPIC_GRP_SW_SET_TMPL      MQTT_TOPIC_PREFIX "grp/%d/switch/set"
 #define MQTT_TOPIC_GRP_SW_GET_TMPL      MQTT_TOPIC_PREFIX "grp/%d/switch/get"
 
+#define MQTT_TOPIC_STATUS_WIFI_RSSI     MQTT_TOPIC_PREFIX "device/wifi/rssi"
+
 #define MQTT_TOPIC_WILDCARD             MQTT_TOPIC_PREFIX "#"
 
 void mqtt_dev_parse_message(struct mqtt_context *context, const char *topic, const char *msg);
@@ -66,5 +69,7 @@ void mqtt_dev_ch_set_sw(struct mqtt_context *context, int ch, uint8_t val);
 void mqtt_dev_grp_set_rgb(struct mqtt_context *context, int grp, uint8_t r, uint8_t g, uint8_t b);
 void mqtt_dev_grp_set_sw(struct mqtt_context *context, int grp, uint8_t val);
 void mqtt_dev_grp_set_br(struct mqtt_context *context, int grp, uint8_t val);
+void mqtt_dev_status_report_wifi_rssi(struct mqtt_context *context, int8_t val);
+void mqtt_dev_status_poll(struct mqtt_context *context);
 
 #endif
